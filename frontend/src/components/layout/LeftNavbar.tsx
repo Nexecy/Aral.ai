@@ -3,16 +3,16 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { 
-  BookOpen, 
+import {
+  BookOpen,
   CalendarDays,
-  Layers, 
-  History, 
-  Settings, 
-  ChevronLeft, 
-  ChevronRight, 
-  Sun, 
-  Moon, 
+  Layers,
+  History,
+  Settings,
+  ChevronLeft,
+  ChevronRight,
+  Sun,
+  Moon,
   Timer,
   LogOut,
   Menu,
@@ -23,6 +23,7 @@ import { useAuth } from '@/context/AuthContext';
 import { usePomodoro } from '@/context/PomodoroContext';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { UserAvatar } from '@/components/brand/UserAvatar';
+import { TopNavMenus } from './TopNavMenus';
 
 export function LeftNavbar() {
   const pathname = usePathname();
@@ -64,12 +65,13 @@ export function LeftNavbar() {
     });
   };
 
-  // Auto-collapse below 1024px. A media query listener fires only when the
-  // breakpoint is actually crossed, rather than on every resize frame.
   useEffect(() => {
     const query = window.matchMedia('(max-width: 1023px)');
     const apply = (matches: boolean) => {
-      if (matches) setCollapsed(true);
+      if (matches) {
+        setCollapsed(true);
+        setMobileOpen(false);
+      }
     };
     apply(query.matches);
 
@@ -78,10 +80,15 @@ export function LeftNavbar() {
     return () => query.removeEventListener('change', onChange);
   }, []);
 
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
   const navItems = [
     {
       id: 'library',
       label: 'Library & Upload',
+      shortLabel: 'Library',
       href: '/',
       icon: BookOpen,
       badge: 'Hub',
@@ -90,6 +97,7 @@ export function LeftNavbar() {
     {
       id: 'workspace',
       label: 'Study Workspace',
+      shortLabel: 'Study',
       href: '/workspace/',
       activePrefix: '/session/',
       icon: Layers,
@@ -99,83 +107,84 @@ export function LeftNavbar() {
     {
       id: 'calendar',
       label: 'Exam Calendar',
+      shortLabel: 'Exams',
       href: '/calendar/',
       icon: CalendarDays
     },
     {
       id: 'history',
       label: 'Session History',
+      shortLabel: 'History',
       href: '/history/',
       icon: History
     },
     {
       id: 'settings',
       label: 'Settings & Keys',
+      shortLabel: 'Settings',
       href: '/settings/',
       icon: Settings
     }
   ];
 
+  const isItemActive = (item: (typeof navItems)[number]) =>
+    pathname === item.href ||
+    (item.href !== '/' && pathname.startsWith(item.href)) ||
+    (item.activePrefix ? pathname.startsWith(item.activePrefix) : false);
+
+  const showLabels = mobileOpen || !collapsed;
+
   return (
     <>
-      {/* Mobile Top Bar */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 h-14 bg-card border-b border-border z-40 px-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <div className="lg:hidden fixed top-0 left-0 right-0 h-14 bg-card/95 backdrop-blur-xl border-b border-border z-40 px-3 flex items-center justify-between">
+        <div className="flex items-center gap-1.5 min-w-0">
           <button
-            onClick={() => setMobileOpen(!mobileOpen)}
-            className="p-1.5 rounded-md hover:bg-muted text-foreground"
-            aria-label="Toggle menu"
+            type="button"
+            onClick={() => setMobileOpen((open) => !open)}
+            className="p-2 rounded-xl hover:bg-muted text-foreground"
+            aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={mobileOpen}
           >
             {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
-          <BrandLogo size={28} wordmarkClassName="text-sm" />
+          <BrandLogo size={26} wordmarkClassName="text-sm" />
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
+            type="button"
             onClick={toggleWidget}
-            className={`px-2.5 py-1 rounded-full text-xs font-medium flex items-center gap-1.5 border transition-all ${
-              isRunning 
+            className={`px-2.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 border transition-all ${
+              isRunning
                 ? 'bg-sticker-orange/15 text-sticker-orange border-sticker-orange/30 animate-pulse'
                 : 'bg-muted text-muted-foreground border-border'
             }`}
           >
             <Timer className="w-3.5 h-3.5" />
-            <span>{formattedTime}</span>
+            <span className="font-mono font-bold">{formattedTime}</span>
           </button>
-
-          <button
-            onClick={toggleTheme}
-            className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-            title="Toggle theme"
-          >
-            {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-          </button>
+          <TopNavMenus compact />
         </div>
       </div>
 
-      {/* Mobile Drawer Overlay */}
       {mobileOpen && (
-        <div 
+        <div
           className="lg:hidden fixed inset-0 bg-black/40 backdrop-blur-sm z-40"
           onClick={() => setMobileOpen(false)}
         />
       )}
 
-      {/* Sidebar Rail (Desktop & Mobile Drawer) */}
       <aside
         className={`fixed top-0 bottom-0 left-0 z-50 bg-card border-r border-border flex flex-col justify-between overflow-visible transition-all duration-300 ease-in-out ${
-          // Desktop sizing
           collapsed ? 'lg:w-[72px]' : 'lg:w-[260px]'
         } ${
-          // Mobile responsive slide-in
-          mobileOpen ? 'translate-x-0 w-[260px]' : '-translate-x-full lg:translate-x-0'
+          mobileOpen
+            ? 'translate-x-0 w-[min(20rem,86vw)]'
+            : '-translate-x-full lg:translate-x-0'
         }`}
       >
-        {/* Top Branding & Navigation */}
-        <div className={collapsed ? 'px-2 pt-4 pb-2' : 'p-4'}>
-          {/* Header & Logo */}
-          <div className={`relative mb-6 ${collapsed ? 'flex justify-center py-2' : 'flex items-center justify-between px-2 py-3'}`}>
+        <div className={`${showLabels ? 'p-4' : 'px-2 pt-4 pb-2'} ${mobileOpen ? 'pt-[4.5rem] lg:pt-4' : ''}`}>
+          <div className={`relative mb-6 hidden lg:flex ${collapsed ? 'justify-center py-2' : 'items-center justify-between px-2 py-3'}`}>
             {collapsed ? (
               <BrandLogo href="/" size={28} showWordmark={false} />
             ) : (
@@ -183,14 +192,10 @@ export function LeftNavbar() {
             )}
           </div>
 
-          {/* Navigation Links */}
-          <nav className={collapsed ? 'space-y-1' : 'space-y-1.5'}>
+          <nav className={showLabels ? 'space-y-1.5' : 'space-y-1'}>
             {navItems.map((item) => {
               const Icon = item.icon;
-              const isActive =
-                pathname === item.href ||
-                (item.href !== '/' && pathname.startsWith(item.href)) ||
-                (item.activePrefix ? pathname.startsWith(item.activePrefix) : false);
+              const isActive = isItemActive(item);
 
               return (
                 <Link
@@ -198,23 +203,22 @@ export function LeftNavbar() {
                   href={item.href}
                   onClick={() => setMobileOpen(false)}
                   className={`group relative flex items-center rounded-xl text-sm font-medium transition-all ${
-                    collapsed
-                      ? `justify-center w-11 h-11 mx-auto ${
+                    showLabels
+                      ? `gap-3.5 px-3.5 py-3 ${
+                          isActive
+                            ? 'bg-primary/10 text-primary font-semibold'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-muted/70'
+                        }`
+                      : `justify-center w-11 h-11 mx-auto ${
                           isActive
                             ? 'bg-primary/10 text-primary'
                             : 'text-muted-foreground hover:text-foreground hover:bg-muted/70'
                         }`
-                      : `gap-3.5 px-3.5 py-3 ${
-                          isActive
-                            ? 'bg-primary/10 text-primary font-semibold shadow-none'
-                            : 'text-muted-foreground hover:text-foreground hover:bg-muted/70'
-                        }`
                   }`}
-                  title={collapsed ? item.label : undefined}
+                  title={!showLabels ? item.label : undefined}
                 >
                   <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'}`} />
-                  
-                  {!collapsed && (
+                  {showLabels && (
                     <div className="flex items-center justify-between w-full">
                       <span className="truncate">{item.label}</span>
                       {item.badge && (
@@ -224,8 +228,7 @@ export function LeftNavbar() {
                       )}
                     </div>
                   )}
-
-                  {isActive && !collapsed && (
+                  {isActive && showLabels && (
                     <div className="absolute left-0 top-2 bottom-2 w-1 bg-primary rounded-r-full" />
                   )}
                 </Link>
@@ -234,21 +237,25 @@ export function LeftNavbar() {
           </nav>
         </div>
 
-        {/* Bottom Profile, Pomodoro Mini-pill & Theme Toggle */}
-        <div className={`${collapsed ? 'px-2 py-3' : 'p-4'} border-t border-border space-y-2`}>
-          {!collapsed ? (
-            <div 
+        <div
+          className={`${showLabels ? 'p-4' : 'px-2 py-3'} border-t border-border space-y-2`}
+          style={mobileOpen ? { paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' } : undefined}
+        >
+          {showLabels ? (
+            <button
+              type="button"
               onClick={toggleWidget}
-              className="p-3 rounded-xl bg-surface-container-low border border-border flex items-center justify-between cursor-pointer hover:border-primary/40 transition-colors group"
+              className="w-full p-3 rounded-xl bg-surface-container-low border border-border flex items-center justify-between cursor-pointer hover:border-primary/40 transition-colors"
             >
               <div className="flex items-center gap-2.5">
                 <Timer className={`w-4 h-4 ${isRunning ? 'text-primary animate-pulse' : 'text-muted-foreground'}`} />
                 <span className="text-xs font-semibold text-foreground">Focus Timer</span>
               </div>
               <span className="text-xs font-mono font-bold text-primary">{formattedTime}</span>
-            </div>
+            </button>
           ) : (
             <button
+              type="button"
               onClick={toggleWidget}
               className="w-11 h-11 mx-auto flex items-center justify-center rounded-xl hover:bg-muted text-muted-foreground hover:text-primary transition-colors"
               title={`Focus Timer: ${formattedTime}`}
@@ -257,33 +264,9 @@ export function LeftNavbar() {
             </button>
           )}
 
-          {collapsed ? (
-            <div className="flex flex-col items-center gap-1">
-              <div title={user?.display_name?.trim() || user?.email || 'Account'}>
-                <UserAvatar user={user} size={32} />
-              </div>
-              <button
-                onClick={toggleTheme}
-                className="w-11 h-11 flex items-center justify-center rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-              >
-                {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-              </button>
-              <button
-                onClick={() => {
-                  logout();
-                  router.replace('/login/');
-                }}
-                className="w-11 h-11 flex items-center justify-center rounded-xl text-muted-foreground hover:text-destructive hover:bg-muted transition-colors"
-                title="Sign out"
-                aria-label="Sign out"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            </div>
-          ) : (
+          {showLabels ? (
             <div className="flex items-center justify-between pt-1">
-              <div className="flex items-center gap-2.5 overflow-hidden">
+              <div className="flex items-center gap-2.5 overflow-hidden min-w-0">
                 <UserAvatar user={user} size={32} />
                 <div className="truncate">
                   <div className="text-xs font-semibold text-foreground truncate">
@@ -294,9 +277,9 @@ export function LeftNavbar() {
                   </div>
                 </div>
               </div>
-
               <div className="flex items-center gap-0.5 shrink-0">
                 <button
+                  type="button"
                   onClick={toggleTheme}
                   className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                   title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
@@ -304,6 +287,7 @@ export function LeftNavbar() {
                   {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
                 </button>
                 <button
+                  type="button"
                   onClick={() => {
                     logout();
                     router.replace('/login/');
@@ -315,6 +299,32 @@ export function LeftNavbar() {
                   <LogOut className="w-4 h-4" />
                 </button>
               </div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-1">
+              <div title={user?.display_name?.trim() || user?.email || 'Account'}>
+                <UserAvatar user={user} size={32} />
+              </div>
+              <button
+                type="button"
+                onClick={toggleTheme}
+                className="w-11 h-11 flex items-center justify-center rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+              >
+                {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  logout();
+                  router.replace('/login/');
+                }}
+                className="w-11 h-11 flex items-center justify-center rounded-xl text-muted-foreground hover:text-destructive hover:bg-muted transition-colors"
+                title="Sign out"
+                aria-label="Sign out"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
             </div>
           )}
         </div>
@@ -332,28 +342,30 @@ export function LeftNavbar() {
         </button>
       </aside>
 
-      {/* Mobile Bottom Navigation Bar */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 h-16 bg-card border-t border-border z-40 px-6 flex items-center justify-around">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const isActive =
-            pathname === item.href ||
-            (item.href !== '/' && pathname.startsWith(item.href)) ||
-            (item.activePrefix ? pathname.startsWith(item.activePrefix) : false);
-          return (
-            <Link
-              key={item.id}
-              href={item.href}
-              className={`flex flex-col items-center gap-1 transition-colors ${
-                isActive ? 'text-primary font-semibold' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <Icon className="w-5 h-5" />
-              <span className="text-[10px]">{item.label.split(' ')[0]}</span>
-            </Link>
-          );
-        })}
-      </div>
+      <nav
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-card/95 backdrop-blur-xl border-t border-border"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      >
+        <div className="h-16 px-1 flex items-stretch justify-around">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = isItemActive(item);
+            return (
+              <Link
+                key={item.id}
+                href={item.href}
+                onClick={() => setMobileOpen(false)}
+                className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-0.5 px-1 transition-colors ${
+                  isActive ? 'text-primary font-semibold' : 'text-muted-foreground'
+                }`}
+              >
+                <Icon className="w-5 h-5" />
+                <span className="text-[10px] leading-tight truncate max-w-full">{item.shortLabel}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
     </>
   );
 }

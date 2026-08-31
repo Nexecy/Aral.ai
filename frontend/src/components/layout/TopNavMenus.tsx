@@ -11,7 +11,7 @@ import { UserAvatar } from '@/components/brand/UserAvatar';
 
 type OpenMenu = 'bell' | 'avatar' | null;
 
-export function TopNavMenus() {
+export function TopNavMenus({ compact = false }: { compact?: boolean }) {
   const router = useRouter();
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
@@ -37,12 +37,14 @@ export function TopNavMenus() {
   const displayName = user?.display_name?.trim() || user?.email || 'Signed in';
 
   return (
-    <div ref={rootRef} className="flex items-center gap-3">
+    <div ref={rootRef} className={`flex items-center ${compact ? 'gap-1' : 'gap-3'}`}>
       <div className="relative">
         <button
           type="button"
           onClick={() => setOpen((current) => (current === 'bell' ? null : 'bell'))}
-          className="relative w-10 h-10 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-surface-container transition-colors"
+          className={`relative rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-surface-container transition-colors ${
+            compact ? 'w-9 h-9' : 'w-10 h-10'
+          }`}
           title="Notifications"
           aria-expanded={open === 'bell'}
         >
@@ -52,7 +54,7 @@ export function TopNavMenus() {
           )}
         </button>
         {open === 'bell' && (
-          <div className="absolute right-0 mt-2 w-80 rounded-2xl border border-border bg-card shadow-notion-elevated overflow-hidden z-50">
+          <div className="absolute right-0 mt-2 w-[min(20rem,calc(100vw-1.5rem))] rounded-2xl border border-border bg-card shadow-notion-elevated overflow-hidden z-50">
             <div className="flex items-center justify-between px-4 py-3 border-b border-border">
               <p className="text-xs font-bold text-foreground">Notifications</p>
               {items.length > 0 && (
@@ -102,10 +104,10 @@ export function TopNavMenus() {
           title={displayName}
           aria-expanded={open === 'avatar'}
         >
-          <UserAvatar user={user} size={40} />
+          <UserAvatar user={user} size={compact ? 32 : 40} />
         </button>
         {open === 'avatar' && (
-          <div className="absolute right-0 mt-2 w-64 rounded-2xl border border-border bg-card shadow-notion-elevated overflow-hidden z-50">
+          <div className="absolute right-0 mt-2 w-[min(16rem,calc(100vw-1.5rem))] rounded-2xl border border-border bg-card shadow-notion-elevated overflow-hidden z-50">
             <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
               <UserAvatar user={user} size={40} />
               <div className="min-w-0">

@@ -120,7 +120,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* Main Content Viewport */}
-      <main className="flex-1 lg:pl-[var(--sidebar-width,260px)] pt-14 lg:pt-20 pb-20 lg:pb-12 transition-all duration-300">
+      <main className="flex-1 lg:pl-[var(--sidebar-width,260px)] pt-14 lg:pt-20 pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-12 transition-all duration-300">
         <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-10 py-6 lg:py-8">
           <VerifyEmailBanner />
           {children}
