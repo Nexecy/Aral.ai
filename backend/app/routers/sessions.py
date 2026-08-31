@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List, Dict, Any, Optional
+import asyncio
 from app.core.auth import get_current_user
 from app.services.db_service import db_service
 from app.models.schemas import (
@@ -118,14 +119,19 @@ async def get_session_snapshot(
     await _owned_session(session_id, user["id"])
     session = await db_service.resume_session(session_id)
 
-    document = None
-    if session.get("document_id"):
-        document = await db_service.get_document(session["document_id"])
+    document_id = session.get("document_id") if session else None
+    document, notes, flashcards, quiz_attempts, chat_history = await asyncio.gather(
+        db_service.get_document(document_id) if document_id else asyncio.sleep(0),
+        db_service.get_notes(session_id),
+        db_service.get_flashcards(session_id),
+        db_service.get_quiz_attempts(session_id),
+        db_service.get_chat_history(session_id),
+    )
 
-    notes = await db_service.get_notes(session_id)
-    flashcards = await db_service.get_flashcards(session_id)
-    quiz_attempts = await db_service.get_quiz_attempts(session_id)
-    chat_history = await db_service.get_chat_history(session_id)
+    # Workspace loads the file bytes separately; skip shipping the full extract
+    # in the snapshot JSON (it can dwarf notes + chat combined).
+    if document:
+        document = {**document, "extracted_text": ""}
 
     return {
         "session": session,

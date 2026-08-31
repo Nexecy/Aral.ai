@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import dynamic from 'next/dynamic';
 import {
   BookOpen,
   Layers,
@@ -32,14 +33,11 @@ import { CompactNotesCard } from '@/components/study/CompactNotesCard';
 import { CompactFlashcardCard } from '@/components/study/CompactFlashcardCard';
 import { CompactQuizCard } from '@/components/study/CompactQuizCard';
 import { WorkspaceChatPanel, TutorContextRequest } from '@/components/study/WorkspaceChatPanel';
-import { NotesReviewEditor } from '@/components/study/NotesReviewEditor';
-import { FlashcardDeck, FlashcardPrefill } from '@/components/study/FlashcardDeck';
-import { QuizArena } from '@/components/study/QuizArena';
-import { RealtimeChatPanel } from '@/components/study/RealtimeChatPanel';
+import { FlashcardPrefill } from '@/components/study/FlashcardDeck';
 import { SessionSnapshot, Notes, Flashcard, QuizAttempt, ChatMessage } from '@/lib/types';
 import { api } from '@/lib/api';
 import { usePomodoro } from '@/context/PomodoroContext';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth, useEmailGate } from '@/context/AuthContext';
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { useShortcutMap } from '@/hooks/useShortcuts';
@@ -60,6 +58,29 @@ import {
 } from '@/lib/sessionCache';
 
 type ViewMode = 'split' | 'notes' | 'flashcards' | 'quiz' | 'chat';
+
+const panelFallback = (
+  <div className="py-16 flex justify-center">
+    <Loader2 className="w-8 h-8 text-primary animate-spin" />
+  </div>
+);
+
+const NotesReviewEditor = dynamic(
+  () => import('@/components/study/NotesReviewEditor').then((m) => ({ default: m.NotesReviewEditor })),
+  { ssr: false, loading: () => panelFallback }
+);
+const FlashcardDeck = dynamic(
+  () => import('@/components/study/FlashcardDeck').then((m) => ({ default: m.FlashcardDeck })),
+  { ssr: false, loading: () => panelFallback }
+);
+const QuizArena = dynamic(
+  () => import('@/components/study/QuizArena').then((m) => ({ default: m.QuizArena })),
+  { ssr: false, loading: () => panelFallback }
+);
+const RealtimeChatPanel = dynamic(
+  () => import('@/components/study/RealtimeChatPanel').then((m) => ({ default: m.RealtimeChatPanel })),
+  { ssr: false, loading: () => panelFallback }
+);
 
 interface FloatPos { x: number; y: number; }
 
@@ -114,6 +135,7 @@ function snapshotFromCache(cached: CachedSessionState): SessionSnapshot {
 export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProps) {
   const router = useRouter();
   const { user } = useAuth();
+  const { allowed: aiAllowed } = useEmailGate();
   const {
     linkSession,
     formattedTime,
@@ -135,6 +157,8 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [restoredOffline, setRestoredOffline] = useState<boolean>(false);
+  const [notesGenerating, setNotesGenerating] = useState<boolean>(false);
+  const [openedViews, setOpenedViews] = useState<Record<string, boolean>>({ split: true });
 
   // ── Selection → AI / Flashcard bridge ────────────────────────────────────────
   const [contextRequest, setContextRequest] = useState<TutorContextRequest | null>(null);
@@ -388,6 +412,33 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
     return () => { cancelled = true; };
   }, [sessionId]);
 
+  useEffect(() => {
+    setOpenedViews((prev) => (prev[viewMode] ? prev : { ...prev, [viewMode]: true }));
+  }, [viewMode]);
+
+  const notesContent = snapshot?.notes?.content;
+  const snapshotDocumentId = snapshot?.document?.id;
+
+  useEffect(() => {
+    if (!snapshotDocumentId || notesContent || !aiAllowed) return;
+
+    let cancelled = false;
+    setNotesGenerating(true);
+    api
+      .generateNotes(sessionId)
+      .then((notes) => {
+        if (!cancelled) setSnapshot((prev) => (prev ? { ...prev, notes } : prev));
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setNotesGenerating(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId, snapshotDocumentId, notesContent, aiAllowed]);
+
   // ── Auto-save the live workspace state ───────────────────────────────────────
   // The countdown ticks every second; checkpointing every 5s keeps the cache
   // current without hammering IndexedDB.
@@ -626,7 +677,7 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
 
   const toolTabs = [
     { id: 'split',      label: 'Split View', icon: Columns,  count: 'Live' },
-    { id: 'notes',      label: 'Notes',      icon: BookOpen, count: notes ? 'Ready' : 'Pending' },
+    { id: 'notes',      label: 'Notes',      icon: BookOpen, count: notesGenerating ? '…' : notes ? 'Ready' : 'Pending' },
     { id: 'flashcards', label: 'Flashcards', icon: Layers,   count: flashcards.length > 0 ? `${flashcards.length}` : '—' },
     { id: 'quiz',       label: 'Quiz',       icon: Award,    count: quiz_attempts.length ? `${quiz_attempts[0].score}%` : '3 Modes' },
     { id: 'chat',       label: 'AI Tutor',   icon: Bot,      count: 'Live' }
@@ -1047,7 +1098,11 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
               isHDragging ? 'pointer-events-none' : ''
             }`}
           >
-            <CompactNotesCard notes={notes} onOpenFullNotes={() => setViewMode('notes')} />
+            <CompactNotesCard
+              notes={notes}
+              generating={notesGenerating}
+              onOpenFullNotes={() => setViewMode('notes')}
+            />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <CompactFlashcardCard
@@ -1088,6 +1143,7 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
       </div>
 
       {/* VIEW MODE 2: FULL NOTES REVIEWER */}
+      {openedViews.notes && (
       <div className={`${viewMode === 'notes' ? 'block' : 'hidden'} space-y-4 animate-in fade-in`}>
         <div className="flex items-center justify-between p-3 rounded-xl bg-card border border-border text-xs">
           <span className="font-semibold text-muted-foreground">Viewing Full Notes Reviewer Editor</span>
@@ -1099,11 +1155,14 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
         <NotesReviewEditor
           sessionId={sessionId}
           initialNotes={notes || null}
+          generating={notesGenerating}
           onConfirmReview={handleNotesReviewed}
         />
       </div>
+      )}
 
       {/* VIEW MODE 3: FULL FLASHCARD DECK */}
+      {openedViews.flashcards && (
       <div className={`${viewMode === 'flashcards' ? 'block' : 'hidden'} space-y-4 animate-in fade-in`}>
         <div className="flex items-center justify-between p-3 rounded-xl bg-card border border-border text-xs">
           <span className="font-semibold text-muted-foreground">Viewing Active Recall Flashcard Arena</span>
@@ -1122,8 +1181,10 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
           active={viewMode === 'flashcards'}
         />
       </div>
+      )}
 
       {/* VIEW MODE 4: FULL QUIZ ARENA */}
+      {openedViews.quiz && (
       <div className={`${viewMode === 'quiz' ? 'block' : 'hidden'} space-y-4 animate-in fade-in`}>
         <div className="flex items-center justify-between p-3 rounded-xl bg-card border border-border text-xs">
           <span className="font-semibold text-muted-foreground">Viewing Multi-Mode Quiz Arena</span>
@@ -1138,8 +1199,10 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
           onAttemptSaved={handleAttemptSaved}
         />
       </div>
+      )}
 
       {/* VIEW MODE 5: FULL AI TUTOR */}
+      {openedViews.chat && (
       <div className={`${viewMode === 'chat' ? 'block' : 'hidden'} space-y-4 animate-in fade-in`}>
         <div className="flex items-center justify-between p-3 rounded-xl bg-card border border-border text-xs">
           <span className="font-semibold text-muted-foreground">Viewing Dedicated AI Study Tutor</span>
@@ -1150,6 +1213,7 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
         </div>
         <RealtimeChatPanel sessionId={sessionId} initialMessages={snapshot.chat_history} />
       </div>
+      )}
     </div>
   );
 }

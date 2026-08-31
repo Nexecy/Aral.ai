@@ -19,15 +19,15 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["'Hanken Grotesk'", "Inter", "sans-serif"],
-        hanken: ["'Hanken Grotesk'", "sans-serif"],
-        mono: ["'JetBrains Mono'", "monospace"],
-        "label-caps": ["'JetBrains Mono'", "'Hanken Grotesk'", "monospace"],
-        "display-lg": ["'Hanken Grotesk'", "sans-serif"],
-        "headline-md": ["'Hanken Grotesk'", "sans-serif"],
-        "headline-sm": ["'Hanken Grotesk'", "sans-serif"],
-        "body-lg": ["'Hanken Grotesk'", "sans-serif"],
-        "body-sm": ["'Hanken Grotesk'", "sans-serif"],
+        sans: ["var(--font-hanken)", "system-ui", "sans-serif"],
+        hanken: ["var(--font-hanken)", "system-ui", "sans-serif"],
+        mono: ["var(--font-jetbrains)", "ui-monospace", "monospace"],
+        "label-caps": ["var(--font-jetbrains)", "var(--font-hanken)", "monospace"],
+        "display-lg": ["var(--font-hanken)", "sans-serif"],
+        "headline-md": ["var(--font-hanken)", "sans-serif"],
+        "headline-sm": ["var(--font-hanken)", "sans-serif"],
+        "body-lg": ["var(--font-hanken)", "sans-serif"],
+        "body-sm": ["var(--font-hanken)", "sans-serif"],
       },
       colors: {
         border: "hsl(var(--border))",

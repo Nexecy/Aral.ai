@@ -15,12 +15,22 @@ except ImportError:
 class GeminiService:
     def __init__(self):
         self._configured = False
+        self._json_model = None
+        self._chat_model = None
         self._setup_client()
 
     def _setup_client(self):
         if HAS_GOOGLE_GENAI and settings.has_gemini_key:
             try:
                 genai.configure(api_key=settings.GEMINI_API_KEY)
+                self._json_model = genai.GenerativeModel(
+                    model_name=settings.GEMINI_MODEL,
+                    generation_config={
+                        "response_mime_type": "application/json",
+                        "max_output_tokens": 4096,
+                    },
+                )
+                self._chat_model = genai.GenerativeModel(model_name=settings.GEMINI_MODEL)
                 self._configured = True
             except Exception as e:
                 print(f"[GeminiService] Warning: Failed to configure Gemini SDK: {e}")
@@ -28,44 +38,45 @@ class GeminiService:
         else:
             self._configured = False
 
+    @staticmethod
+    def _compact(data: Any, limit: int) -> str:
+        return json.dumps(data, separators=(",", ":"), ensure_ascii=False)[:limit]
+
+    @staticmethod
+    def _notes_excerpt(notes_json: Dict[str, Any]) -> Dict[str, Any]:
+        sections = []
+        for section in (notes_json.get("sections") or [])[:10]:
+            sections.append({
+                "heading": section.get("heading"),
+                "subpoints": (section.get("subpoints") or [])[:6],
+                "key_terms": [
+                    {"term": term.get("term"), "definition": term.get("definition")}
+                    for term in (section.get("key_terms") or [])[:6]
+                ],
+            })
+        return {
+            "title": notes_json.get("title"),
+            "summary": notes_json.get("summary"),
+            "sections": sections,
+        }
+
     async def generate_notes(self, text: str, document_title: str) -> Dict[str, Any]:
         """
         Generate structured notes (title, summary, sections with headings, subpoints, key terms) using Gemini JSON mode.
         """
-        prompt = f"""
-You are an expert educational AI tutor. Analyze the following study material from '{document_title}' and generate comprehensive, well-structured study notes.
+        prompt = f"""You are an expert educational AI tutor. Analyze the study material from '{document_title}' and generate structured study notes.
 
-Format your response strictly as JSON with this exact schema:
-{{
-  "title": "Clear concise title of the notes",
-  "summary": "2-3 sentence executive summary of key concepts",
-  "sections": [
-    {{
-      "heading": "Section Heading",
-      "subpoints": [
-        "Concise, informative bullet point explaining a core idea",
-        "Another supporting detail or concept"
-      ],
-      "key_terms": [
-        {{
-          "term": "Specific Term or Keyword",
-          "definition": "Clear, accurate definition"
-        }}
-      ]
-    }}
-  ]
-}}
+Return JSON with this schema:
+{{"title":"string","summary":"2-3 sentences","sections":[{{"heading":"string","subpoints":["concise bullet"],"key_terms":[{{"term":"string","definition":"string"}}]}}]}}
 
-Source text:
-{text[:30000]}
+Keep sections high-yield (4-8). No preamble.
+
+Source:
+{text[:18000]}
 """
-        if self._configured:
+        if self._configured and self._json_model:
             try:
-                model = genai.GenerativeModel(
-                    model_name=settings.GEMINI_MODEL,
-                    generation_config={"response_mime_type": "application/json"}
-                )
-                response = await asyncio.to_thread(model.generate_content, prompt)
+                response = await asyncio.to_thread(self._json_model.generate_content, prompt)
                 parsed = json.loads(response.text)
                 return parsed
             except Exception as e:
@@ -78,29 +89,16 @@ Source text:
         """
         Generate flashcard pairs {front, back} from reviewed structured notes.
         """
-        notes_str = json.dumps(notes_json, indent=2)
-        prompt = f"""
-You are an expert memory and active-recall tutor. Based on the following structured notes, create {count} high-yield flashcards for students.
-Each card must test a distinct key concept, mechanism, definition, or relationship.
+        notes_str = self._compact(self._notes_excerpt(notes_json), 8000)
+        prompt = f"""You are an expert memory tutor. Create {count} high-yield flashcards from these notes.
+Each card tests a distinct concept. Return a JSON array of {{"front","back"}} objects. No preamble.
 
-Format your response strictly as JSON array of objects:
-[
-  {{
-    "front": "Clear question, concept prompt, or term",
-    "back": "Accurate, digestible answer or explanation"
-  }}
-]
-
-Structured Notes:
-{notes_str[:20000]}
+Notes:
+{notes_str}
 """
-        if self._configured:
+        if self._configured and self._json_model:
             try:
-                model = genai.GenerativeModel(
-                    model_name=settings.GEMINI_MODEL,
-                    generation_config={"response_mime_type": "application/json"}
-                )
-                response = await asyncio.to_thread(model.generate_content, prompt)
+                response = await asyncio.to_thread(self._json_model.generate_content, prompt)
                 parsed = json.loads(response.text)
                 if isinstance(parsed, dict) and "flashcards" in parsed:
                     parsed = parsed["flashcards"]
@@ -118,8 +116,8 @@ Structured Notes:
         - 'identification': question (prompt/clue), correct_answer, explanation
         - 'matching': matching_pairs [{left, right}], explanation
         """
-        notes_str = json.dumps(notes_json, indent=2)
-        
+        notes_str = self._compact(self._notes_excerpt(notes_json), 8000)
+
         type_instructions = {
             "multiple_choice": """
 Format as JSON array:
@@ -167,22 +165,16 @@ Format as JSON array:
         }
 
         instructions = type_instructions.get(quiz_type, type_instructions["multiple_choice"])
-        prompt = f"""
-You are a senior professor designing an assessment for students.
-Create a {quiz_type} quiz with {count} questions based on these structured study notes:
+        prompt = f"""You are a senior professor. Create a {quiz_type} quiz with {count} questions from these notes.
 
 {instructions}
 
-Structured Notes:
-{notes_str[:20000]}
+Notes:
+{notes_str}
 """
-        if self._configured:
+        if self._configured and self._json_model:
             try:
-                model = genai.GenerativeModel(
-                    model_name=settings.GEMINI_MODEL,
-                    generation_config={"response_mime_type": "application/json"}
-                )
-                response = await asyncio.to_thread(model.generate_content, prompt)
+                response = await asyncio.to_thread(self._json_model.generate_content, prompt)
                 parsed = json.loads(response.text)
                 if isinstance(parsed, dict) and "questions" in parsed:
                     parsed = parsed["questions"]
@@ -204,28 +196,18 @@ Structured Notes:
         Stream chat assistant response via Server-Sent Events (SSE).
         Supports detecting commands to modify notes or regenerate sections.
         """
-        notes_summary = json.dumps(notes_content, indent=2)
-        system_context = f"""
-You are Aral.ai, an insightful, encouraging study assistant.
-Current Study Session: '{session_title}'
-
-Current Structured Notes:
-{notes_summary[:10000]}
-
-Guidelines:
-- Answer student questions clearly, concisely, and supportively.
-- If the user asks to add, clarify, or modify a section in their notes, explain the change and optionally provide a `[NOTE_UPDATE]` JSON block if they want to apply it directly.
-- Use clean formatting, bullet points, and code blocks where appropriate.
-"""
-        if self._configured:
+        notes_summary = self._compact(self._notes_excerpt(notes_content), 6000)
+        system_context = f"""You are Aral.ai, an encouraging study assistant for '{session_title}'.
+Notes: {notes_summary}
+Answer clearly. If the student asks to change notes, optionally include a [NOTE_UPDATE] JSON block."""
+        if self._configured and self._chat_model:
             try:
-                model = genai.GenerativeModel(model_name=settings.GEMINI_MODEL)
                 history = []
                 for msg in chat_history[-6:]:
                     role = "user" if msg["role"] == "user" else "model"
                     history.append({"role": role, "parts": [msg["content"]]})
-                
-                chat = model.start_chat(history=history)
+
+                chat = self._chat_model.start_chat(history=history)
                 response = await asyncio.to_thread(
                     chat.send_message,
                     f"{system_context}\n\nUser Question: {user_message}",
@@ -234,7 +216,7 @@ Guidelines:
                 for chunk in response:
                     if chunk.text:
                         yield chunk.text
-                        await asyncio.sleep(0.02)
+                        await asyncio.sleep(0)
                 return
             except Exception as e:
                 print(f"[GeminiService] Chat stream API error: {e}. Falling back to simulated stream.")
@@ -242,9 +224,11 @@ Guidelines:
         # Fallback simulated streaming response
         response_text = self._generate_fallback_chat_reply(user_message, notes_content)
         words = response_text.split(" ")
-        for i, word in enumerate(words):
-            yield word + (" " if i < len(words) - 1 else "")
-            await asyncio.sleep(0.03)
+        for i in range(0, len(words), 4):
+            chunk = " ".join(words[i:i + 4])
+            suffix = " " if i + 4 < len(words) else ""
+            yield chunk + suffix
+            await asyncio.sleep(0)
 
     # --------------------------------------------------------------------------
     # Fallback / Demo Data Generators

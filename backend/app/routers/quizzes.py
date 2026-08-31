@@ -1,5 +1,4 @@
 import json
-import asyncio
 from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from fastapi.responses import StreamingResponse
 from typing import List, Dict, Any, Optional
@@ -38,7 +37,6 @@ async def generate_quiz(
     if stream:
         async def progress_generator():
             yield f"data: {json.dumps({'step': 'parsing', 'progress': 20, 'message': f'Formatting {payload.quiz_type} schema...'})}\n\n"
-            await asyncio.sleep(0.3)
             yield f"data: {json.dumps({'step': 'generating', 'progress': 60, 'message': f'Generating {payload.question_count} questions with Gemini...'})}\n\n"
             
             questions = await gemini_service.generate_quiz(

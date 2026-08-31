@@ -1,5 +1,4 @@
 import json
-import asyncio
 from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from fastapi.responses import StreamingResponse
 from typing import List, Dict, Any, Optional
@@ -32,7 +31,6 @@ async def generate_flashcards(
     if stream:
         async def progress_generator():
             yield f"data: {json.dumps({'step': 'reading_notes', 'progress': 20, 'message': 'Analyzing reviewed notes...'})}\n\n"
-            await asyncio.sleep(0.3)
             yield f"data: {json.dumps({'step': 'generating', 'progress': 60, 'message': 'Generating active recall question-answer pairs with Gemini...'})}\n\n"
             
             cards_data = await gemini_service.generate_flashcards(notes["content"], count=count)

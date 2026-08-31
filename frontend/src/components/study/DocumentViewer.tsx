@@ -157,8 +157,33 @@ function DocumentViewerImpl({
 
   // Split extracted text into pages on the backend's page markers. Markdown is
   // kept whole so its document structure survives.
+  const [extractedText, setExtractedText] = useState<string>(document?.extracted_text || '');
+
+  useEffect(() => {
+    setExtractedText(document?.extracted_text || '');
+  }, [document?.id, document?.extracted_text]);
+
+  const needsExtract = viewFormat === 'text' || !supportsOriginal;
+
+  useEffect(() => {
+    const documentId = document?.id;
+    if (!documentId || !needsExtract) return;
+    if ((extractedText || '').trim()) return;
+
+    let cancelled = false;
+    api
+      .getDocument(documentId)
+      .then((full) => {
+        if (!cancelled && full.extracted_text) setExtractedText(full.extracted_text);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [document?.id, needsExtract, extractedText]);
+
   const pages = useMemo(() => {
-    const raw = document?.extracted_text || '';
+    const raw = extractedText || '';
     if (!raw.trim()) return [''];
     if (isMarkdown) return [raw];
 
@@ -167,7 +192,7 @@ function DocumentViewerImpl({
       .map((p) => p.trim())
       .filter(Boolean);
     return chunks.length > 0 ? chunks : [raw];
-  }, [document?.extracted_text, isMarkdown]);
+  }, [extractedText, isMarkdown]);
 
   const totalPages = pages.length;
   const activePage = pages[Math.min(currentPage, totalPages) - 1] || '';
@@ -200,11 +225,9 @@ function DocumentViewerImpl({
       const title = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
       const session = await api.createSession(title, doc.id);
       if (aiAllowed) {
-        setUploadStep('Generating study materials with Gemini...');
-        await api.generateNotes(session.id);
-      } else {
-        setUploadStep('Session ready. Confirm your email to generate AI notes.');
+        void api.generateNotes(session.id).catch(() => {});
       }
+      setUploadStep('Opening workspace...');
       router.push(`/session/${session.id}/`);
     } catch (err: any) {
       setUploadError(err.message || 'Failed to process document.');

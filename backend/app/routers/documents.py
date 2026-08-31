@@ -67,7 +67,9 @@ async def upload_document(
         file_size_bytes=extracted["file_size_bytes"]
     )
 
-    return doc_record
+    # The client only needs the id to create a session. Keep the extract in the
+    # database; don't ship tens of KB back on the upload response.
+    return {**doc_record, "extracted_text": ""}
 
 @router.get("", response_model=List[DocumentResponse])
 async def list_documents(user: Dict[str, Any] = Depends(get_current_user)):

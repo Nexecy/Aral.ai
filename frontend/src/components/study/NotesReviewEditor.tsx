@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Check, 
   Edit3, 
@@ -11,6 +11,7 @@ import {
   Tag, 
   BookOpen, 
   CheckCircle2,
+  Loader2,
   Layers,
   ArrowRight,
   HelpCircle
@@ -21,6 +22,7 @@ import { api } from '@/lib/api';
 interface NotesReviewEditorProps {
   sessionId: string;
   initialNotes: Notes | null;
+  generating?: boolean;
   onConfirmReview: (reviewedNotes: Notes) => void;
   onRegenerateNotes?: () => void;
 }
@@ -28,6 +30,7 @@ interface NotesReviewEditorProps {
 export function NotesReviewEditor({
   sessionId,
   initialNotes,
+  generating = false,
   onConfirmReview,
   onRegenerateNotes
 }: NotesReviewEditorProps) {
@@ -43,6 +46,10 @@ export function NotesReviewEditor({
   const [saving, setSaving] = useState<boolean>(false);
   const [isReviewed, setIsReviewed] = useState<boolean>(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialNotes?.content) setContent(initialNotes.content);
+  }, [initialNotes]);
 
   // Update Section Title
   const handleSectionHeadingChange = (index: number, newHeading: string) => {
@@ -139,6 +146,13 @@ export function NotesReviewEditor({
 
   return (
     <div className="space-y-6">
+      {generating && content.sections.length === 0 && (
+        <div className="p-10 rounded-2xl bg-card border border-border flex flex-col items-center justify-center gap-3">
+          <Loader2 className="w-8 h-8 text-primary animate-spin" />
+          <p className="text-sm font-semibold text-foreground">Generating structured notes…</p>
+          <p className="text-xs text-muted-foreground">You can keep reading the document while Gemini works.</p>
+        </div>
+      )}
       {/* Top Banner: Notion Review Step Indicator */}
       <div className="p-4 rounded-xl bg-card border border-border shadow-notion-soft flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">

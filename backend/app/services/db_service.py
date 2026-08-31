@@ -1,8 +1,16 @@
 import os
 import uuid
+import asyncio
 from datetime import date, datetime, timedelta
 from typing import Dict, Any, List, Optional
 from app.core.config import settings
+
+# Session/document list payloads must not include extracted_text — a single PDF
+# can be tens of KB of JSON and it was nested onto every row of /sessions.
+DOCUMENT_META_COLUMNS = (
+    "id, user_id, filename, storage_path, page_count, file_size_bytes, uploaded_at"
+)
+SESSION_LIST_SELECT = f"*, documents({DOCUMENT_META_COLUMNS})"
 
 try:
     from supabase import create_client, Client
@@ -50,6 +58,12 @@ class DBService:
 
         self._init_supabase()
 
+    @staticmethod
+    def _document_meta(doc: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        if not doc:
+            return None
+        return {k: v for k, v in doc.items() if k != "extracted_text"}
+
     def _init_supabase(self):
         if HAS_SUPABASE and settings.has_supabase_credentials:
             try:
@@ -88,14 +102,18 @@ class DBService:
     async def get_documents(self, user_id: str) -> List[Dict[str, Any]]:
         if self.supabase:
             try:
-                res = self.supabase.table("documents").select("*").eq("user_id", user_id).order("uploaded_at", desc=True).execute()
+                res = self.supabase.table("documents").select(DOCUMENT_META_COLUMNS).eq("user_id", user_id).order("uploaded_at", desc=True).execute()
                 remote = res.data or []
                 if remote:
                     return remote
             except Exception as e:
                 print(f"[DBService] Supabase get documents error: {e}")
 
-        return [d for d in self.documents.values() if d.get("user_id") == user_id]
+        return [
+            self._document_meta(d) or d
+            for d in self.documents.values()
+            if d.get("user_id") == user_id
+        ]
 
     async def get_document(self, doc_id: str) -> Optional[Dict[str, Any]]:
         if self.supabase:
@@ -142,7 +160,7 @@ class DBService:
         remote: List[Dict[str, Any]] = []
         if self.supabase:
             try:
-                q = self.supabase.table("sessions").select("*, documents(*)").eq("user_id", user_id).order("last_accessed_at", desc=True)
+                q = self.supabase.table("sessions").select(SESSION_LIST_SELECT).eq("user_id", user_id).order("last_accessed_at", desc=True)
                 if query:
                     q = q.ilike("title", f"%{query}%")
                 res = q.execute()
@@ -159,7 +177,7 @@ class DBService:
         for s in local:
             doc_id = s.get("document_id")
             if doc_id and doc_id in self.documents:
-                s["document"] = self.documents[doc_id]
+                s["document"] = self._document_meta(self.documents[doc_id])
 
         # Merge rather than letting an empty remote result mask locally buffered
         # sessions (writes fall back to memory whenever Supabase rejects them).
@@ -171,7 +189,7 @@ class DBService:
     async def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
         if self.supabase:
             try:
-                res = self.supabase.table("sessions").select("*, documents(*)").eq("id", session_id).single().execute()
+                res = self.supabase.table("sessions").select(SESSION_LIST_SELECT).eq("id", session_id).single().execute()
                 if res.data:
                     return res.data
             except Exception as e:
@@ -181,7 +199,7 @@ class DBService:
         if session:
             doc_id = session.get("document_id")
             if doc_id and doc_id in self.documents:
-                session["document"] = self.documents[doc_id]
+                session["document"] = self._document_meta(self.documents[doc_id])
         return session
 
     async def update_session_access(self, session_id: str):
@@ -815,11 +833,13 @@ class DBService:
 
     async def get_dashboard_summary(self, user_id: str) -> Dict[str, Any]:
         """Every dashboard stat card, computed from this user's real records only."""
-        sessions = await self.get_sessions(user_id)
-        documents = await self.get_documents(user_id)
-        stats = await self.get_pomodoro_stats(user_id)
-        nearest_exam = await self.get_nearest_exam(user_id)
-        streak = await self.get_study_streak(user_id)
+        sessions, documents, stats, nearest_exam, streak = await asyncio.gather(
+            self.get_sessions(user_id),
+            self.get_documents(user_id),
+            self.get_pomodoro_stats(user_id),
+            self.get_nearest_exam(user_id),
+            self.get_study_streak(user_id),
+        )
 
         latest = sessions[0] if sessions else None
 

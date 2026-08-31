@@ -1,6 +1,6 @@
 import json
 import asyncio
-from fastapi import APIRouter, Depends, HTTPException, Query, Body
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from typing import Dict, Any, Optional
 from app.core.auth import get_current_user, require_verified_email
@@ -11,11 +11,23 @@ from app.models.schemas import NotesResponse, NotesUpdate, NoteContent
 
 router = APIRouter(prefix="/sessions/{session_id}/notes", tags=["notes"])
 
+_generate_locks: Dict[str, asyncio.Lock] = {}
+
+
+def _lock_for(session_id: str) -> asyncio.Lock:
+    lock = _generate_locks.get(session_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _generate_locks[session_id] = lock
+    return lock
+
+
 @router.post("/generate")
 async def generate_notes(
     session_id: str,
     stream: bool = Query(False, description="Whether to stream SSE progress updates"),
     scope: str = Query("full document", description="Extraction scope"),
+    force: bool = Query(False, description="Regenerate even if notes already exist"),
     user: Dict[str, Any] = Depends(require_verified_email)
 ):
     """
@@ -24,31 +36,36 @@ async def generate_notes(
     """
     session = await require_session_owner(session_id, user["id"])
 
-    document = None
-    if session.get("document_id"):
-        document = await db_service.get_document(session["document_id"])
+    async with _lock_for(session_id):
+        if not force:
+            existing = await db_service.get_notes(session_id)
+            if existing and existing.get("content"):
+                return existing
 
-    source_text = document.get("extracted_text", "") if document else "Foundational study notes."
-    doc_title = document.get("filename", session.get("title", "Study Material")) if document else session.get("title", "Study Material")
+        document = None
+        if session.get("document_id"):
+            document = await db_service.get_document(session["document_id"])
 
-    if stream:
-        async def progress_generator():
-            yield f"data: {json.dumps({'step': 'extracting', 'progress': 25, 'message': 'Extracting document structure...'})}\n\n"
-            await asyncio.sleep(0.3)
-            yield f"data: {json.dumps({'step': 'analyzing', 'progress': 50, 'message': 'Gemini analyzing key concepts and terms...'})}\n\n"
-            await asyncio.sleep(0.3)
-            yield f"data: {json.dumps({'step': 'structuring', 'progress': 75, 'message': 'Synthesizing structured notes & definitions...'})}\n\n"
-            
-            raw_notes = await gemini_service.generate_notes(source_text, doc_title)
-            saved_notes = await db_service.upsert_notes(session_id, raw_notes, scope=scope)
-            
-            yield f"data: {json.dumps({'step': 'completed', 'progress': 100, 'message': 'Ready for review!', 'result': saved_notes})}\n\n"
+        source_text = document.get("extracted_text", "") if document else "Foundational study notes."
+        doc_title = document.get("filename", session.get("title", "Study Material")) if document else session.get("title", "Study Material")
 
-        return StreamingResponse(progress_generator(), media_type="text/event-stream")
-    else:
+        if stream:
+            async def progress_generator():
+                yield f"data: {json.dumps({'step': 'extracting', 'progress': 25, 'message': 'Extracting document structure...'})}\n\n"
+                yield f"data: {json.dumps({'step': 'analyzing', 'progress': 50, 'message': 'Gemini analyzing key concepts and terms...'})}\n\n"
+                yield f"data: {json.dumps({'step': 'structuring', 'progress': 75, 'message': 'Synthesizing structured notes & definitions...'})}\n\n"
+
+                raw_notes = await gemini_service.generate_notes(source_text, doc_title)
+                saved_notes = await db_service.upsert_notes(session_id, raw_notes, scope=scope)
+
+                yield f"data: {json.dumps({'step': 'completed', 'progress': 100, 'message': 'Ready for review!', 'result': saved_notes})}\n\n"
+
+            return StreamingResponse(progress_generator(), media_type="text/event-stream")
+
         raw_notes = await gemini_service.generate_notes(source_text, doc_title)
         saved_notes = await db_service.upsert_notes(session_id, raw_notes, scope=scope)
         return saved_notes
+
 
 @router.get("", response_model=Optional[NotesResponse])
 async def get_notes(
@@ -63,6 +80,7 @@ async def get_notes(
     if not notes:
         raise HTTPException(status_code=404, detail="Notes not yet generated for this session")
     return notes
+
 
 @router.put("", response_model=NotesResponse)
 async def update_notes(

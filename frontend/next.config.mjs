@@ -10,7 +10,7 @@ const nextConfig = {
     unoptimized: true,
   },
   reactStrictMode: true,
-  transpilePackages: ['lucide-react', 'framer-motion', 'canvas-confetti', 'clsx', 'tailwind-merge'],
+  transpilePackages: ['canvas-confetti'],
 };
 
 export default nextConfig;

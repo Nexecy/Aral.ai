@@ -16,7 +16,6 @@ import {
   Grid,
   Lightbulb
 } from 'lucide-react';
-import confetti from 'canvas-confetti';
 import { QuizQuestion, QuizAttempt } from '@/lib/types';
 import { sound } from '@/lib/sound';
 import { api } from '@/lib/api';
@@ -113,10 +112,12 @@ export function QuizArena({
       
       if (attempt.score >= 70) {
         sound.playSuccessFanfare();
-        confetti({
-          particleCount: 80,
-          spread: 70,
-          origin: { y: 0.6 }
+        void import('canvas-confetti').then(({ default: confetti }) => {
+          confetti({
+            particleCount: 80,
+            spread: 70,
+            origin: { y: 0.6 }
+          });
         });
       }
 

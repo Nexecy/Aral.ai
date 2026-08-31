@@ -96,16 +96,12 @@ export function DocumentUploader({ onUploadSuccess }: DocumentUploaderProps) {
       const sessionTitle = file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ');
       const session = await api.createSession(sessionTitle, doc.id);
 
-      // 3. Trigger initial notes generation
-      const fileExt = file.name.toLowerCase();
-      const isImage = ['.png','.jpg','.jpeg','.webp','.gif','.bmp','.tiff','.tif'].some(e => fileExt.endsWith(e));
+      // Kick off notes in the background so the workspace can open immediately.
       if (aiAllowed) {
-        setProgressStep(isImage ? 'Analyzing image content with AI...' : 'Synthesizing structured notes with Gemini...');
-        await api.generateNotes(session.id);
-      } else {
-        setProgressStep('Session ready. Confirm your email to generate AI notes.');
+        void api.generateNotes(session.id).catch(() => {});
       }
 
+      setProgressStep('Opening workspace...');
       if (onUploadSuccess) {
         onUploadSuccess(doc, session);
       } else {

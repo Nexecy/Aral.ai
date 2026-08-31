@@ -75,6 +75,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
   ]);
 
+  if (isAuthPage) {
+    return <>{children}</>;
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
@@ -83,10 +87,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <p className="text-sm font-semibold text-muted-foreground">Loading Aral.ai…</p>
       </div>
     );
-  }
-
-  if (isAuthPage) {
-    return <>{children}</>;
   }
 
   if (!user) {

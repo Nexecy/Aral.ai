@@ -5,6 +5,8 @@ import { User } from '@/lib/types';
 import { api } from '@/lib/api';
 import { clearAuthRedirectFromUrl, readAuthRedirect } from '@/lib/authRedirect';
 
+const USER_CACHE_KEY = 'aral_auth_user';
+
 interface SystemStatus {
   has_supabase: boolean;
   has_gemini: boolean;
@@ -41,6 +43,22 @@ function persistToken(token: string | null) {
   else localStorage.removeItem('aral_auth_token');
 }
 
+function persistUser(user: User | null) {
+  if (typeof window === 'undefined') return;
+  if (user) localStorage.setItem(USER_CACHE_KEY, JSON.stringify(user));
+  else localStorage.removeItem(USER_CACHE_KEY);
+}
+
+function readCachedUser(): User | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(USER_CACHE_KEY);
+    return raw ? (JSON.parse(raw) as User) : null;
+  } catch {
+    return null;
+  }
+}
+
 function userFromMe(me: User & { email_verified?: boolean; has_supabase?: boolean; has_gemini?: boolean; gemini_model?: string }): User {
   return {
     id: me.id,
@@ -64,6 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const applySession = useCallback(async (accessToken: string | null) => {
     if (!accessToken) {
       persistToken(null);
+      persistUser(null);
       setToken(null);
       setUser(null);
       return;
@@ -71,7 +90,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     persistToken(accessToken);
     setToken(accessToken);
     const me = await api.getMe();
-    setUser(userFromMe(me));
+    const nextUser = userFromMe(me);
+    persistUser(nextUser);
+    setUser(nextUser);
     setSystemStatus({
       has_supabase: me.has_supabase,
       has_gemini: me.has_gemini,
@@ -109,13 +130,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const savedToken = localStorage.getItem('aral_auth_token');
         if (!savedToken) {
+          persistUser(null);
           setUser(null);
           setToken(null);
           return;
         }
+
+        const cachedUser = readCachedUser();
+        if (cachedUser) {
+          setToken(savedToken);
+          setUser(cachedUser);
+          setLoading(false);
+        }
+
         await applySession(savedToken);
       } catch {
         persistToken(null);
+        persistUser(null);
         setToken(null);
         setUser(null);
         setSystemStatus(null);
@@ -150,6 +181,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = () => {
     persistToken(null);
+    persistUser(null);
     setToken(null);
     setUser(null);
   };
@@ -178,7 +210,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshUser = useCallback(async () => {
     const me = await api.getMe();
-    setUser(userFromMe(me));
+    const nextUser = userFromMe(me);
+    persistUser(nextUser);
+    setUser(nextUser);
     setSystemStatus({
       has_supabase: me.has_supabase,
       has_gemini: me.has_gemini,
@@ -187,7 +221,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const applyUser = useCallback((me: User) => {
-    setUser(userFromMe(me));
+    const nextUser = userFromMe(me);
+    persistUser(nextUser);
+    setUser(nextUser);
   }, []);
 
   return (
