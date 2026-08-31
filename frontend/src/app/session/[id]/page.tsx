@@ -1,10 +1,12 @@
 import React from 'react';
 import { SessionWorkspaceClient } from '@/components/study/SessionWorkspaceClient';
 
-// Session ids are UUIDs minted at runtime, so the static export can only emit a
-// placeholder shell here. The dev server and any hosted (non-export) build
-// resolve real ids normally.
+export const dynamicParams = true;
+
+// Static export (Capacitor/Tauri) can only emit a placeholder path.
+// Vercel and `next dev` generate real session ids on demand.
 export function generateStaticParams() {
+  if (process.env.VERCEL === '1') return [];
   return [{ id: 'session' }];
 }
 
