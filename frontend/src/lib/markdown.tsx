@@ -1,4 +1,5 @@
 import React from 'react';
+import { splitAndRenderMath } from '@/lib/latex';
 
 /**
  * Minimal markdown-to-React renderer for the document reader.
@@ -46,9 +47,10 @@ function renderInline(line: string, keyPrefix: string): React.ReactNode[] {
         </code>
       );
     }
-    if (token.bold) return <strong key={key} className="font-bold text-on-surface">{token.text}</strong>;
-    if (token.italic) return <em key={key} className="italic">{token.text}</em>;
-    return <React.Fragment key={key}>{token.text}</React.Fragment>;
+    const body = splitAndRenderMath(token.text, key);
+    if (token.bold) return <strong key={key} className="font-bold text-on-surface">{body}</strong>;
+    if (token.italic) return <em key={key} className="italic">{body}</em>;
+    return <React.Fragment key={key}>{body}</React.Fragment>;
   });
 }
 
@@ -103,6 +105,8 @@ export function renderMarkdown(
   let listOrdered = false;
   let codeLines: string[] = [];
   let inCodeFence = false;
+  let mathLines: string[] = [];
+  let inDisplayMath = false;
 
   const flushParagraph = () => {
     if (paragraph.length === 0) return;
@@ -139,6 +143,17 @@ export function renderMarkdown(
     listItems = [];
   };
 
+  const flushDisplayMath = () => {
+    if (mathLines.length === 0) return;
+    const key = `m-${blocks.length}`;
+    blocks.push(
+      <div key={key} className={`${isChat ? 'my-1' : 'my-4'} text-center overflow-x-auto font-medium text-on-surface`}>
+        {splitAndRenderMath(`$$${mathLines.join(' ')}$$`, key)}
+      </div>
+    );
+    mathLines = [];
+  };
+
   const flushCode = () => {
     if (codeLines.length === 0) return;
     const key = `c-${blocks.length}`;
@@ -171,6 +186,24 @@ export function renderMarkdown(
 
     if (inCodeFence) {
       codeLines.push(rawLine);
+      continue;
+    }
+
+    const trimmed = line.trim();
+    if (trimmed === '$$') {
+      if (inDisplayMath) {
+        flushDisplayMath();
+        inDisplayMath = false;
+      } else {
+        flushParagraph();
+        flushList();
+        inDisplayMath = true;
+      }
+      continue;
+    }
+
+    if (inDisplayMath) {
+      mathLines.push(trimmed);
       continue;
     }
 
@@ -241,6 +274,7 @@ export function renderMarkdown(
   }
 
   flushCode();
+  flushDisplayMath();
   flushParagraph();
   flushList();
 

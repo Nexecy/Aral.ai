@@ -199,7 +199,7 @@ Notes:
         notes_summary = self._compact(self._notes_excerpt(notes_content), 6000)
         system_context = f"""You are Aral.ai, an encouraging study assistant for '{session_title}'.
 Notes: {notes_summary}
-Answer clearly. If the student asks to change notes, optionally include a [NOTE_UPDATE] JSON block."""
+Answer clearly in Markdown. Write formulas in plain text or Unicode (1.01^365 = 37.78, Cue → Craving). Never wrap math in $...$ or use LaTeX commands. If the student asks to change notes, optionally include a [NOTE_UPDATE] JSON block."""
         if self._configured and self._chat_model:
             try:
                 history = []
