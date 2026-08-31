@@ -35,7 +35,7 @@ def _normalize_email(email: str) -> str:
 
 
 def _frontend_path(path: str) -> str:
-    base = (settings.FRONTEND_URL or "http://localhost:3000").rstrip("/")
+    base = settings.frontend_origin.rstrip("/")
     if not path.startswith("/"):
         path = f"/{path}"
     if not path.endswith("/"):
@@ -301,7 +301,13 @@ def resend_confirmation(email: str) -> Dict[str, Any]:
     client = None if _use_local_auth() else _supabase_client()
     if client:
         try:
-            client.auth.resend({"type": "signup", "email": email})
+            client.auth.resend(
+                {
+                    "type": "signup",
+                    "email": email,
+                    "options": {"email_redirect_to": _frontend_path("/confirm/")},
+                }
+            )
         except Exception as exc:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -406,7 +412,13 @@ def change_email(user_id: str, current_email: str, new_email: str) -> Dict[str, 
     client = None if _use_local_auth() else _supabase_client()
     if client:
         try:
-            client.auth.admin.update_user_by_id(user_id, {"email": new_email})
+            client.auth.admin.update_user_by_id(
+                user_id,
+                {
+                    "email": new_email,
+                    "email_redirect_to": _frontend_path("/confirm/"),
+                },
+            )
         except Exception as exc:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

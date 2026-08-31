@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     SUPABASE_JWT_SECRET: str = Field(default="")
     
     FRONTEND_URL: str = Field(default="http://localhost:3000")
+    # Used when the API is hosted (Render) but FRONTEND_URL was left on localhost.
+    PRODUCTION_FRONTEND_URL: str = Field(default="https://aral-ai-three.vercel.app")
 
     # CORS
     CORS_ORIGINS: str = Field(
@@ -25,8 +27,21 @@ class Settings(BaseSettings):
     )
 
     @property
+    def frontend_origin(self) -> str:
+        url = (self.FRONTEND_URL or "").strip().rstrip("/")
+        hosted = bool(os.getenv("RENDER") or os.getenv("RENDER_EXTERNAL_URL"))
+        local = (not url) or ("localhost" in url) or ("127.0.0.1" in url)
+        if hosted and local:
+            return (self.PRODUCTION_FRONTEND_URL or "https://aral-ai-three.vercel.app").rstrip("/")
+        return url or "http://localhost:3000"
+
+    @property
     def cors_origins_list(self) -> List[str]:
-        return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
+        origins = [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
+        live = self.frontend_origin
+        if live and live not in origins:
+            origins.append(live)
+        return origins
 
     @property
     def has_gemini_key(self) -> bool:
