@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="supported-color-schemes" content="light dark" />
+    <title>Confirm your Aral.ai account</title>
+    <!-- Subject: Confirm your Aral.ai account -->
+    <style>
+      :root { color-scheme: light dark; }
+      @media (prefers-color-scheme: dark) {
+        .page { background-color: #070b12 !important; }
+        .card { background-color: #0f172a !important; }
+        .copy, .heading { color: #f8fafc !important; }
+        .muted { color: #94a3b8 !important; }
+        .code { background-color: #1e293b !important; color: #f8fafc !important; border-color: #334155 !important; }
+      }
+    </style>
+  </head>
+  <body style="margin:0;padding:0;background-color:#f3f4f6;">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;">Confirm your email to start studying with Aral.ai.</div>
+    <table role="presentation" class="page" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f3f4f6;padding:24px 12px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" class="card" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background-color:#ffffff;border-radius:20px;overflow:hidden;border:1px solid #e5e7eb;">
+            <tr>
+              <td style="background-color:#0b0f17;padding:28px 32px;text-align:center;">
+                <img src="https://eiyqtczxmovmgbodpvzu.supabase.co/storage/v1/object/public/branding/logo-white.png" width="48" height="48" alt="Aral.ai" style="display:block;margin:0 auto 10px auto;border:0;outline:none;" />
+                <div style="font-family:Arial,Helvetica,sans-serif;font-size:20px;font-weight:800;color:#ffffff;letter-spacing:-0.3px;">
+                  Aral.ai
+                </div>
+                <div style="font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:#7dd3fc;margin-top:4px;">
+                  Study Assistant
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:32px 32px 12px 32px;">
+                <h1 class="heading" style="margin:0 0 12px 0;font-family:Arial,Helvetica,sans-serif;font-size:22px;line-height:1.3;color:#0f172a;">
+                  Confirm your email
+                </h1>
+                <div class="copy" style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#334155;">
+                  <p style="margin:0 0 12px 0;">Thanks for joining Aral.ai. Confirm <strong>{{ .Email }}</strong> so we can turn your notes into study sheets, flashcards, and quizzes.</p>
+                </div>
+              </td>
+            </tr>
+            
+            <tr>
+              <td align="center" style="padding:8px 32px 20px 32px;">
+                <a href="{{ .ConfirmationURL }}" style="display:inline-block;background-color:#0166fc;color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:700;text-decoration:none;padding:13px 28px;border-radius:999px;">
+                  Confirm email
+                </a>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:0 32px 20px 32px;">
+                <p class="muted" style="margin:0 0 8px 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#64748b;">
+                  Or enter this code:
+                </p>
+                <div class="code" style="font-family:Consolas,Monaco,monospace;font-size:28px;font-weight:700;letter-spacing:6px;color:#0f172a;background-color:#f1f5f9;border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px;text-align:center;">
+                  {{ .Token }}
+                </div>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:8px 32px 28px 32px;">
+                <p class="muted" style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.5;color:#64748b;">
+                  This email was sent by Aral.ai. If you were not expecting it, you can ignore it.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
