@@ -33,6 +33,7 @@ def _me_payload(user: Dict[str, Any], profile: Optional[Dict[str, Any]] = None) 
         "avatar_url": profile.get("avatar_url"),
         "bio": profile.get("bio"),
         "gender": profile.get("gender"),
+        "theme": profile.get("theme"),
         "has_supabase": settings.has_supabase_credentials,
         "has_gemini": settings.has_gemini_key,
         "gemini_model": settings.GEMINI_MODEL,
@@ -104,7 +105,15 @@ async def update_profile(
         patch["bio"] = (data["bio"] or "").strip() or None
     if "gender" in data:
         patch["gender"] = (data["gender"] or "").strip() or None
-    profile = await db_service.upsert_profile(user["id"], patch)
+    if "theme" in data:
+        theme = (data["theme"] or "").strip()
+        if theme and theme not in ("light", "dark"):
+            raise HTTPException(status_code=400, detail="Theme must be light or dark.")
+        patch["theme"] = theme or None
+    try:
+        profile = await db_service.upsert_profile(user["id"], patch)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
     return _me_payload(user, profile)
 
 
@@ -124,8 +133,22 @@ async def upload_avatar(
         ext = "jpg"
     elif "webp" in content_type:
         ext = "webp"
-    url = await storage_service.upload_avatar(user["id"], data, content_type, ext)
-    profile = await db_service.upsert_profile(user["id"], {"avatar_url": url})
+    try:
+        url = await storage_service.upload_avatar(user["id"], data, content_type, ext)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    try:
+        profile = await db_service.upsert_profile(user["id"], {"avatar_url": url})
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Picture uploaded but was not saved to your profile: {exc}",
+        )
+    if not profile.get("avatar_url"):
+        raise HTTPException(
+            status_code=500,
+            detail="Picture uploaded but was not saved to the profiles table.",
+        )
     return _me_payload(user, profile)
 
 

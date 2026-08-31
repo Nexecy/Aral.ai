@@ -50,6 +50,7 @@ class ProfileUpdate(BaseModel):
     display_name: Optional[str] = Field(default=None, max_length=80)
     bio: Optional[str] = Field(default=None, max_length=280)
     gender: Optional[str] = Field(default=None, max_length=40)
+    theme: Optional[str] = Field(default=None, max_length=16)
 
 
 # ==============================================================================

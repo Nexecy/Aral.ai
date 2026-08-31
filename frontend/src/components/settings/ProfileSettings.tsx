@@ -18,7 +18,7 @@ const inputClass =
   'w-full text-sm bg-surface-container-low px-4 py-2.5 rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-foreground placeholder:text-muted-foreground';
 
 export function ProfileSettings() {
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, applyUser } = useAuth();
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   const [displayName, setDisplayName] = useState(user?.display_name ?? '');
@@ -59,11 +59,12 @@ export function ProfileSettings() {
     setProfileError(null);
     setProfileMessage(null);
     try {
-      await api.updateProfile({
+      const me = await api.updateProfile({
         display_name: name,
         bio: bio.trim() || null,
         gender: gender.trim() || null
       });
+      applyUser(me);
       await refreshUser();
       setProfileMessage('Profile saved.');
     } catch (err) {
@@ -79,9 +80,14 @@ export function ProfileSettings() {
     setProfileError(null);
     setProfileMessage(null);
     try {
-      await api.uploadAvatar(file);
+      const me = await api.uploadAvatar(file);
+      applyUser(me);
       await refreshUser();
-      setProfileMessage('Profile picture updated.');
+      if (!me.avatar_url) {
+        setProfileError('Picture uploaded but was not saved to your profile.');
+        return;
+      }
+      setProfileMessage('Profile picture saved.');
     } catch (err) {
       setProfileError(err instanceof Error ? err.message : 'Could not upload picture.');
     } finally {

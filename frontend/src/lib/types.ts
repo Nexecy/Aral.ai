@@ -7,6 +7,7 @@ export interface User {
   avatar_url?: string | null;
   bio?: string | null;
   gender?: string | null;
+  theme?: 'light' | 'dark' | null;
 }
 
 export interface AuthSession {

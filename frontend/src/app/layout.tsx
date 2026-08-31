@@ -5,6 +5,7 @@ import { AuthProvider } from '@/context/AuthContext';
 import { NotificationProvider } from '@/context/NotificationContext';
 import { PomodoroProvider } from '@/context/PomodoroContext';
 import { AppShell } from '@/components/layout/AppShell';
+import { ThemePreferencesSync } from '@/components/layout/ThemePreferencesSync';
 import { BRAND_LOGO_FALLBACK, BRAND_LOGO_URL } from '@/lib/brand';
 
 export const metadata: Metadata = {
@@ -42,6 +43,7 @@ export default function RootLayout({
       <body className="font-sans min-h-screen bg-background text-foreground antialiased">
         <ThemeProvider>
           <AuthProvider>
+            <ThemePreferencesSync />
             <NotificationProvider>
               <PomodoroProvider>
                 <AppShell>

@@ -55,6 +55,7 @@ def test_auth_me():
     assert "avatar_url" in data
     assert "bio" in data
     assert "gender" in data
+    assert "theme" in data
 
 
 def test_profile_update_and_password_change():

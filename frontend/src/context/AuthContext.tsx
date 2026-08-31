@@ -29,6 +29,7 @@ interface AuthContextType {
   resendConfirmation: (email: string) => Promise<{ message: string }>;
   resetPassword: (password: string) => Promise<{ message: string }>;
   refreshUser: () => Promise<void>;
+  applyUser: (me: User) => void;
   systemStatus: SystemStatus | null;
 }
 
@@ -49,7 +50,8 @@ function userFromMe(me: User & { email_verified?: boolean; has_supabase?: boolea
     display_name: me.display_name ?? null,
     avatar_url: me.avatar_url ?? null,
     bio: me.bio ?? null,
-    gender: me.gender ?? null
+    gender: me.gender ?? null,
+    theme: me.theme === 'dark' || me.theme === 'light' ? me.theme : null
   };
 }
 
@@ -184,6 +186,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const applyUser = useCallback((me: User) => {
+    setUser(userFromMe(me));
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{
@@ -198,6 +204,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         resendConfirmation,
         resetPassword,
         refreshUser,
+        applyUser,
         systemStatus
       }}
     >

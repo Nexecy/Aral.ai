@@ -81,6 +81,7 @@ class ApiClient {
     display_name?: string | null;
     bio?: string | null;
     gender?: string | null;
+    theme?: string | null;
   }): Promise<User & { has_supabase: boolean; has_gemini: boolean; gemini_model: string }> {
     return this.request('/auth/profile', {
       method: 'PATCH',

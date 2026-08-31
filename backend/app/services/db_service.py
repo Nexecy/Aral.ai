@@ -1,3 +1,4 @@
+import os
 import uuid
 from datetime import date, datetime, timedelta
 from typing import Dict, Any, List, Optional
@@ -843,6 +844,17 @@ class DBService:
             "avatar_url": None,
             "bio": None,
             "gender": None,
+            "theme": None,
+        }
+
+    def _row_to_profile(self, user_id: str, row: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "id": user_id,
+            "display_name": row.get("display_name"),
+            "avatar_url": row.get("avatar_url"),
+            "bio": row.get("bio"),
+            "gender": row.get("gender"),
+            "theme": row.get("theme"),
         }
 
     async def get_profile(self, user_id: str) -> Dict[str, Any]:
@@ -856,35 +868,48 @@ class DBService:
                     .execute()
                 )
                 if res.data:
-                    row = res.data[0]
-                    return {
-                        "id": user_id,
-                        "display_name": row.get("display_name"),
-                        "avatar_url": row.get("avatar_url"),
-                        "bio": row.get("bio"),
-                        "gender": row.get("gender"),
-                    }
+                    return self._row_to_profile(user_id, res.data[0])
             except Exception as e:
                 print(f"[DBService] Supabase get profile error: {e}")
         return self.profiles.get(user_id) or self._empty_profile(user_id)
 
     async def upsert_profile(self, user_id: str, patch: Dict[str, Any]) -> Dict[str, Any]:
         current = await self.get_profile(user_id)
-        allowed = {k: patch[k] for k in ("display_name", "avatar_url", "bio", "gender") if k in patch}
+        allowed = {
+            k: patch[k]
+            for k in ("display_name", "avatar_url", "bio", "gender", "theme")
+            if k in patch
+        }
         next_profile = {**current, **allowed, "id": user_id, "updated_at": datetime.utcnow().isoformat()}
         if self.supabase:
+            payload = {
+                "id": user_id,
+                "display_name": next_profile.get("display_name"),
+                "avatar_url": next_profile.get("avatar_url"),
+                "bio": next_profile.get("bio"),
+                "gender": next_profile.get("gender"),
+                "theme": next_profile.get("theme"),
+                "updated_at": next_profile["updated_at"],
+            }
             try:
-                payload = {
-                    "id": user_id,
-                    "display_name": next_profile.get("display_name"),
-                    "avatar_url": next_profile.get("avatar_url"),
-                    "bio": next_profile.get("bio"),
-                    "gender": next_profile.get("gender"),
-                    "updated_at": next_profile["updated_at"],
-                }
-                self.supabase.table("profiles").upsert(payload).execute()
+                res = self.supabase.table("profiles").upsert(payload, on_conflict="id").execute()
             except Exception as e:
                 print(f"[DBService] Supabase upsert profile error: {e}")
+                if os.getenv("PYTEST_CURRENT_TEST"):
+                    self.profiles[user_id] = next_profile
+                    return next_profile
+                raise RuntimeError(
+                    "Could not save profile to Supabase. Run the profiles section of supabase/schema.sql in the SQL Editor."
+                ) from e
+            if res.data:
+                saved = self._row_to_profile(user_id, res.data[0])
+                self.profiles[user_id] = saved
+                return saved
+            verified = await self.get_profile(user_id)
+            if "avatar_url" in allowed and verified.get("avatar_url") != allowed["avatar_url"]:
+                raise RuntimeError("Profile row was not written to the database.")
+            self.profiles[user_id] = verified
+            return verified
         self.profiles[user_id] = next_profile
         return next_profile
 

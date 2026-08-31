@@ -74,23 +74,48 @@ class StorageService:
                 return await f.read()
         return None
 
+    def _avatar_public_url(self, storage_path: str) -> str:
+        public = self.supabase_client.storage.from_("avatars").get_public_url(storage_path)
+        url = None
+        if isinstance(public, str):
+            url = public
+        elif isinstance(public, dict):
+            data = public.get("data") if isinstance(public.get("data"), dict) else {}
+            url = public.get("publicUrl") or public.get("publicURL") or data.get("publicUrl")
+        if isinstance(url, str) and url.startswith("http"):
+            return url.split("?")[0]
+        base = settings.SUPABASE_URL.rstrip("/")
+        return f"{base}/storage/v1/object/public/avatars/{storage_path}"
+
     async def upload_avatar(self, user_id: str, file_bytes: bytes, content_type: str, extension: str) -> str:
-        """Store an avatar and return a URL the frontend can load."""
+        """Store an avatar in Supabase Storage and return a durable public URL."""
         filename = f"avatar.{extension.lstrip('.')}"
         storage_path = f"{user_id}/{filename}"
 
         if self.supabase_client:
+            bucket = self.supabase_client.storage.from_("avatars")
+            options = {"content-type": content_type, "upsert": "true"}
+            last_error = None
             try:
-                self.supabase_client.storage.from_("avatars").upload(
-                    path=storage_path,
-                    file=file_bytes,
-                    file_options={"content-type": content_type, "upsert": "true"},
-                )
-                public = self.supabase_client.storage.from_("avatars").get_public_url(storage_path)
-                if isinstance(public, str) and public:
-                    return f"{public.split('?')[0]}?t={uuid.uuid4().hex[:8]}"
-            except Exception as e:
-                print(f"[StorageService] Avatar upload failed ({e}). Falling back to local storage.")
+                bucket.upload(path=storage_path, file=file_bytes, file_options=options)
+            except Exception as upload_error:
+                last_error = upload_error
+                try:
+                    bucket.remove([storage_path])
+                except Exception:
+                    pass
+                try:
+                    bucket.update(path=storage_path, file=file_bytes, file_options=options)
+                    last_error = None
+                except Exception as update_error:
+                    last_error = update_error
+            if last_error is None:
+                return f"{self._avatar_public_url(storage_path)}?t={uuid.uuid4().hex[:8]}"
+            print(f"[StorageService] Avatar upload failed ({last_error}).")
+            raise RuntimeError(
+                "Could not store the picture in the avatars bucket. "
+                "Create the public 'avatars' bucket from supabase/schema.sql."
+            )
 
         avatar_dir = os.path.join(self.local_storage_dir, "avatars", user_id)
         os.makedirs(avatar_dir, exist_ok=True)
