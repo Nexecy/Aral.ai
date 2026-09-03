@@ -498,6 +498,7 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
   // ── Snapshot handlers ─────────────────────────────────────────────────────────
   const handleNotesReviewed = (updatedNotes: Notes) => {
     setSnapshot((prev) => (prev ? { ...prev, notes: updatedNotes } : prev));
+    setViewMode('split');
   };
   const handleCardsUpdated = (cards: Flashcard[]) => {
     setSnapshot((prev) => (prev ? { ...prev, flashcards: cards } : prev));
