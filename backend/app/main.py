@@ -1,6 +1,7 @@
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from app.core.config import settings
 
 from app.routers import (
@@ -23,10 +24,22 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# Configure CORS for Next.js, Capacitor mobile, and Tauri desktop
+# Enable automatic gzip compression for responses >= 500 bytes
+app.add_middleware(GZipMiddleware, minimum_size=500)
+
+# Configure CORS for Next.js, Capacitor mobile, Tauri desktop, and Vercel
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Allow all origins for seamless cross-platform local & device dev
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:3005",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3005",
+        "capacitor://localhost",
+        "http://localhost",
+        "https://aral-ai.vercel.app",
+    ],
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?$|^https://.*\.vercel\.app$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

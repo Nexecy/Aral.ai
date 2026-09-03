@@ -15,7 +15,7 @@ import {
   Palette,
   UserRound
 } from 'lucide-react';
-import { useTheme } from '@/context/ThemeContext';
+import { useTheme, FONT_SIZES } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import { usePomodoro } from '@/context/PomodoroContext';
 import { sound } from '@/lib/sound';
@@ -34,7 +34,7 @@ const TABS: { id: SettingsTab; label: string; icon: React.ElementType }[] = [
 ];
 
 export default function SettingsPage() {
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, fontSize, setFontSize } = useTheme();
   const { systemStatus } = useAuth();
   const pomodoro = usePomodoro();
   const [tab, setTab] = useState<SettingsTab>('appearance');
@@ -95,49 +95,106 @@ export default function SettingsPage() {
       {tab === 'profile' && <ProfileSettings />}
 
       {tab === 'appearance' && (
-      <div className="p-6 rounded-2xl bg-card border border-border shadow-notion-soft space-y-4">
-        <h2 className="text-base font-bold text-foreground flex items-center gap-2">
-          <span>Design Theme & Aesthetic</span>
-        </h2>
+      <div className="space-y-6">
+        <div className="p-6 rounded-2xl bg-card border border-border shadow-notion-soft space-y-4">
+          <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+            <span>Design Theme & Aesthetic</span>
+          </h2>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div
-            onClick={() => setTheme('light')}
-            className={`p-4 rounded-xl border cursor-pointer transition-all ${
-              theme === 'light'
-                ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                : 'border-border bg-card hover:bg-muted/30'
-            }`}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2 font-bold text-sm text-foreground">
-                <Sun className="w-4 h-4 text-sticker-orange" />
-                <span>Notion Warm Paper</span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div
+              onClick={() => setTheme('light')}
+              className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                theme === 'light'
+                  ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                  : 'border-border bg-card hover:bg-muted/30'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2 font-bold text-sm text-foreground">
+                  <Sun className="w-4 h-4 text-sticker-orange" />
+                  <span>Notion Warm Paper</span>
+                </div>
+                {theme === 'light' && <Check className="w-4 h-4 text-primary" />}
               </div>
-              {theme === 'light' && <Check className="w-4 h-4 text-primary" />}
+              <p className="text-xs text-muted-foreground">
+                Off-white #f6f5f4 warm canvas, near-black Inter typography, and Notion blue accents.
+              </p>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Off-white #f6f5f4 warm canvas, near-black Inter typography, and Notion blue accents.
-            </p>
+
+            <div
+              onClick={() => setTheme('dark')}
+              className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                theme === 'dark'
+                  ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                  : 'border-border bg-card hover:bg-muted/30'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2 font-bold text-sm text-foreground">
+                  <Moon className="w-4 h-4 text-sticker-sky" />
+                  <span>Calm Dark Slate</span>
+                </div>
+                {theme === 'dark' && <Check className="w-4 h-4 text-primary" />}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Deep slate & charcoal surfaces designed for night-time study sessions.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* ── FONT SIZE SETTINGS ────────────────────────────────────────────── */}
+        <div className="p-6 rounded-2xl bg-card border border-border shadow-notion-soft space-y-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+                <span>Reading & Interface Font Size</span>
+              </h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Scale text size across study documents, notes, flashcards, and navigation
+              </p>
+            </div>
+            <span className="text-xs font-bold px-3 py-1 rounded-full bg-primary/10 text-primary uppercase tracking-wider">
+              {fontSize} ({FONT_SIZES.find((f) => f.id === fontSize)?.scale || '100%'})
+            </span>
           </div>
 
-          <div
-            onClick={() => setTheme('dark')}
-            className={`p-4 rounded-xl border cursor-pointer transition-all ${
-              theme === 'dark'
-                ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                : 'border-border bg-card hover:bg-muted/30'
-            }`}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2 font-bold text-sm text-foreground">
-                <Moon className="w-4 h-4 text-sticker-sky" />
-                <span>Calm Dark Slate</span>
-              </div>
-              {theme === 'dark' && <Check className="w-4 h-4 text-primary" />}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Deep slate & charcoal surfaces designed for night-time study sessions.
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {FONT_SIZES.map((f) => {
+              const isSelected = fontSize === f.id;
+              return (
+                <div
+                  key={f.id}
+                  onClick={() => setFontSize(f.id)}
+                  className={`p-4 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
+                    isSelected
+                      ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                      : 'border-border bg-card hover:bg-muted/30'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-bold text-sm text-foreground">{f.label}</span>
+                    {isSelected && <Check className="w-4 h-4 text-primary" />}
+                  </div>
+                  <div className="text-[11px] font-mono text-primary font-bold mb-1.5">
+                    {f.scale} · {f.px}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-snug">
+                    {f.desc}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Live sample preview */}
+          <div className="p-4 rounded-xl bg-surface-container-low border border-border space-y-2">
+            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+              Live Reading Preview
+            </span>
+            <p className="text-foreground leading-relaxed">
+              &ldquo;Active recall and spaced repetition are the highest-yield evidence-based study techniques for long-term retention.&rdquo;
             </p>
           </div>
         </div>

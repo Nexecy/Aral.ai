@@ -33,6 +33,7 @@ import { useTextSelection } from '@/hooks/useTextSelection';
 import { SelectionActionMenu } from '@/components/study/SelectionActionMenu';
 import { ImageViewer } from '@/components/study/viewers/ImageViewer';
 import { TextReader } from '@/components/study/viewers/TextReader';
+import { UploadProgressBar, UploadFileMeta } from '@/components/study/UploadProgressBar';
 
 export const ACCEPTED_EXTENSIONS = [
   '.pdf', '.docx', '.doc', '.txt', '.md',
@@ -201,8 +202,23 @@ function DocumentViewerImpl({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [uploadDragging, setUploadDragging] = useState<boolean>(false);
   const [uploading, setUploading] = useState<boolean>(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [selectedUploadFile, setSelectedUploadFile] = useState<UploadFileMeta | null>(null);
+  const [uploadPercent, setUploadPercent] = useState<number>(0);
   const [uploadStep, setUploadStep] = useState<string>('');
+  const [uploadByteProgress, setUploadByteProgress] = useState<{ loaded: number; total: number } | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<'uploading' | 'processing' | 'success' | 'error'>('uploading');
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const resetUploadState = useCallback(() => {
+    setUploading(false);
+    setSelectedUploadFile(null);
+    setUploadPercent(0);
+    setUploadStep('');
+    setUploadByteProgress(null);
+    setUploadStatus('uploading');
+    setUploadError(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }, []);
 
   const handleUploadFile = useCallback(async (file: File) => {
     const name = file.name.toLowerCase();
@@ -216,24 +232,43 @@ function DocumentViewerImpl({
     }
 
     setUploadError(null);
+    setSelectedUploadFile({ name: file.name, size: file.size });
     setUploading(true);
+    setUploadStatus('uploading');
+    setUploadPercent(5);
     setUploadStep('Uploading document...');
+    setUploadByteProgress({ loaded: 0, total: file.size });
+
     try {
-      setUploadStep('Extracting content...');
-      const doc = await api.uploadDocument(file);
+      const doc = await api.uploadDocument(file, (prog) => {
+        const mapped = Math.min(70, Math.max(5, Math.round(5 + (prog.percent * 0.65))));
+        setUploadPercent(mapped);
+        setUploadByteProgress({ loaded: prog.loaded, total: prog.total });
+        setUploadStep(`Uploading document... ${prog.percent}%`);
+      });
+
+      setUploadStatus('processing');
+      setUploadPercent(75);
+      setUploadStep('Extracting text & structure with PyMuPDF...');
+
+      setUploadPercent(88);
       setUploadStep('Creating study session...');
       const title = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
       const session = await api.createSession(title, doc.id);
       if (aiAllowed) {
         void api.generateNotes(session.id).catch(() => {});
       }
-      setUploadStep('Opening workspace...');
-      router.push(`/session/${session.id}/`);
+
+      setUploadPercent(100);
+      setUploadStatus('success');
+      setUploadStep('Ready! Opening workspace...');
+
+      setTimeout(() => {
+        router.push(`/session/${session.id}/`);
+      }, 400);
     } catch (err: any) {
+      setUploadStatus('error');
       setUploadError(err.message || 'Failed to process document.');
-    } finally {
-      setUploading(false);
-      setUploadStep('');
     }
   }, [router, aiAllowed]);
 
@@ -266,7 +301,9 @@ function DocumentViewerImpl({
               if (e.dataTransfer.files[0]) handleUploadFile(e.dataTransfer.files[0]);
             }}
             onClick={() => !uploading && fileInputRef.current?.click()}
-            className={`w-full max-w-md border-2 border-dashed rounded-2xl p-10 sm:p-14 text-center cursor-pointer transition-all duration-200 ${
+            className={`w-full max-w-lg border-2 border-dashed rounded-2xl p-8 sm:p-12 text-center transition-all duration-200 ${
+              uploading ? 'cursor-default' : 'cursor-pointer'
+            } ${
               uploadDragging
                 ? 'border-primary bg-primary/5 scale-[1.01]'
                 : 'border-outline-variant hover:border-primary/50 hover:bg-surface-container'
@@ -278,19 +315,20 @@ function DocumentViewerImpl({
               accept={ACCEPT_ATTR}
               className="hidden"
               onChange={(e) => { if (e.target.files?.[0]) handleUploadFile(e.target.files[0]); }}
-              disabled={uploading}
+              disabled={uploading && uploadStatus !== 'error'}
             />
 
-            {uploading ? (
-              <div className="flex flex-col items-center gap-4">
-                <div className="relative">
-                  <div className="w-14 h-14 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
-                  <Sparkles className="w-5 h-5 text-primary absolute inset-0 m-auto animate-pulse" />
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-on-surface">Processing Study Material</p>
-                  <p className="text-xs text-on-surface-variant animate-pulse mt-1">{uploadStep}</p>
-                </div>
+            {uploading && selectedUploadFile ? (
+              <div className="py-2 flex flex-col items-center justify-center">
+                <UploadProgressBar
+                  file={selectedUploadFile}
+                  percent={uploadPercent}
+                  stage={uploadStep}
+                  byteProgress={uploadByteProgress}
+                  status={uploadStatus}
+                  errorMessage={uploadError}
+                  onRetry={resetUploadState}
+                />
               </div>
             ) : (
               <div className="flex flex-col items-center gap-4">
@@ -321,7 +359,7 @@ function DocumentViewerImpl({
               </div>
             )}
 
-            {uploadError && (
+            {uploadError && !uploading && (
               <p className="mt-4 text-xs text-destructive font-medium bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2">
                 {uploadError}
               </p>

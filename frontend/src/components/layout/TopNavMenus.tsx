@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Bell, LogOut, Moon, Settings, Sun } from 'lucide-react';
+import { Bell, LogOut, Moon, Settings, Sun, Type } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useNotifications } from '@/context/NotificationContext';
@@ -14,7 +14,7 @@ type OpenMenu = 'bell' | 'avatar' | null;
 export function TopNavMenus({ compact = false }: { compact?: boolean }) {
   const router = useRouter();
   const { user, logout } = useAuth();
-  const { theme, toggleTheme } = useTheme();
+  const { theme, toggleTheme, fontSize, cycleFontSize } = useTheme();
   const { items, unreadCount, markRead, markAllRead } = useNotifications();
   const [open, setOpen] = useState<OpenMenu>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -135,6 +135,21 @@ export function TopNavMenus({ compact = false }: { compact?: boolean }) {
             >
               {theme === 'dark' ? <Sun className="w-4 h-4 text-muted-foreground" /> : <Moon className="w-4 h-4 text-muted-foreground" />}
               {theme === 'dark' ? 'Notion Warm Paper' : 'Calm Dark Slate'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                cycleFontSize();
+              }}
+              className="w-full flex items-center justify-between px-4 py-2.5 text-sm text-foreground hover:bg-surface-container-low"
+            >
+              <div className="flex items-center gap-2">
+                <Type className="w-4 h-4 text-muted-foreground" />
+                <span>Font Size</span>
+              </div>
+              <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-primary/10 text-primary uppercase">
+                {fontSize}
+              </span>
             </button>
             <button
               type="button"

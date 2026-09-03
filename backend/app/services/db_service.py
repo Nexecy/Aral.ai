@@ -674,7 +674,7 @@ class DBService:
         parsed = _coerce_date(exam_date)
         if parsed is None:
             return 0
-        return (parsed - datetime.utcnow().date()).days
+        return (parsed - date.today()).days
 
     def _decorate_exam(self, exam: Dict[str, Any]) -> Dict[str, Any]:
         return {**exam, "days_remaining": self._days_remaining(exam.get("exam_date"))}

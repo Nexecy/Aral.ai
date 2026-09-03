@@ -25,12 +25,62 @@ import { BrandLogo } from '@/components/brand/BrandLogo';
 import { UserAvatar } from '@/components/brand/UserAvatar';
 import { TopNavMenus } from './TopNavMenus';
 
+function MobileNavTimerButton() {
+  const { isRunning, formattedTime, toggleWidget } = usePomodoro();
+  return (
+    <button
+      type="button"
+      onClick={toggleWidget}
+      className={`px-2.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 border transition-all ${
+        isRunning
+          ? 'bg-sticker-orange/15 text-sticker-orange border-sticker-orange/30 animate-pulse'
+          : 'bg-muted text-muted-foreground border-border'
+      }`}
+      aria-label="Toggle Focus Timer"
+    >
+      <Timer className="w-3.5 h-3.5" />
+      <span className="font-mono font-bold">{formattedTime}</span>
+    </button>
+  );
+}
+
+function SidebarTimerButton({ showLabels }: { showLabels: boolean }) {
+  const { isRunning, formattedTime, toggleWidget } = usePomodoro();
+  if (showLabels) {
+    return (
+      <button
+        type="button"
+        onClick={toggleWidget}
+        className="w-full p-3 rounded-xl bg-surface-container-low border border-border flex items-center justify-between cursor-pointer hover:border-primary/40 transition-colors"
+      >
+        <div className="flex items-center gap-2.5">
+          <Timer className={`w-4 h-4 ${isRunning ? 'text-primary animate-pulse' : 'text-muted-foreground'}`} />
+          <span className="text-xs font-semibold text-foreground">Focus Timer</span>
+        </div>
+        <span className="text-xs font-mono font-bold text-primary">{formattedTime}</span>
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={toggleWidget}
+      className="w-11 h-11 mx-auto flex items-center justify-center rounded-xl hover:bg-muted text-muted-foreground hover:text-primary transition-colors"
+      title={`Focus Timer: ${formattedTime}`}
+      aria-label={`Focus Timer: ${formattedTime}`}
+    >
+      <Timer className={`w-5 h-5 ${isRunning ? 'text-primary' : ''}`} />
+    </button>
+  );
+}
+
 export function LeftNavbar() {
   const pathname = usePathname();
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
+  const { currentSessionId } = usePomodoro();
   const router = useRouter();
-  const { isRunning, formattedTime, toggleWidget } = usePomodoro();
 
   const [collapsed, setCollapsed] = useState<boolean>(false);
   const [mobileOpen, setMobileOpen] = useState<boolean>(false);
@@ -98,10 +148,10 @@ export function LeftNavbar() {
       id: 'workspace',
       label: 'Study Workspace',
       shortLabel: 'Study',
-      href: '/workspace/',
+      href: currentSessionId ? `/session/${currentSessionId}/` : '/workspace/',
       activePrefix: '/session/',
       icon: Layers,
-      badge: pathname.startsWith('/session/') ? 'Active' : undefined,
+      badge: currentSessionId ? 'Active' : undefined,
       badgeColor: 'bg-sticker-sky/15 text-sticker-sky'
     },
     {
@@ -129,7 +179,7 @@ export function LeftNavbar() {
 
   const isItemActive = (item: (typeof navItems)[number]) =>
     pathname === item.href ||
-    (item.href !== '/' && pathname.startsWith(item.href)) ||
+    (item.href !== '/' && !item.href.startsWith('/session/') && pathname.startsWith(item.href)) ||
     (item.activePrefix ? pathname.startsWith(item.activePrefix) : false);
 
   const showLabels = mobileOpen || !collapsed;
@@ -151,18 +201,7 @@ export function LeftNavbar() {
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
-          <button
-            type="button"
-            onClick={toggleWidget}
-            className={`px-2.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 border transition-all ${
-              isRunning
-                ? 'bg-sticker-orange/15 text-sticker-orange border-sticker-orange/30 animate-pulse'
-                : 'bg-muted text-muted-foreground border-border'
-            }`}
-          >
-            <Timer className="w-3.5 h-3.5" />
-            <span className="font-mono font-bold">{formattedTime}</span>
-          </button>
+          <MobileNavTimerButton />
           <TopNavMenus compact />
         </div>
       </div>
@@ -201,8 +240,9 @@ export function LeftNavbar() {
                 <Link
                   key={item.id}
                   href={item.href}
+                  draggable={false}
                   onClick={() => setMobileOpen(false)}
-                  className={`group relative flex items-center rounded-xl text-sm font-medium transition-all ${
+                  className={`group relative flex items-center rounded-xl text-sm font-medium transition-all select-none ${
                     showLabels
                       ? `gap-3.5 px-3.5 py-3 ${
                           isActive
@@ -241,28 +281,7 @@ export function LeftNavbar() {
           className={`${showLabels ? 'p-4' : 'px-2 py-3'} border-t border-border space-y-2`}
           style={mobileOpen ? { paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' } : undefined}
         >
-          {showLabels ? (
-            <button
-              type="button"
-              onClick={toggleWidget}
-              className="w-full p-3 rounded-xl bg-surface-container-low border border-border flex items-center justify-between cursor-pointer hover:border-primary/40 transition-colors"
-            >
-              <div className="flex items-center gap-2.5">
-                <Timer className={`w-4 h-4 ${isRunning ? 'text-primary animate-pulse' : 'text-muted-foreground'}`} />
-                <span className="text-xs font-semibold text-foreground">Focus Timer</span>
-              </div>
-              <span className="text-xs font-mono font-bold text-primary">{formattedTime}</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={toggleWidget}
-              className="w-11 h-11 mx-auto flex items-center justify-center rounded-xl hover:bg-muted text-muted-foreground hover:text-primary transition-colors"
-              title={`Focus Timer: ${formattedTime}`}
-            >
-              <Timer className={`w-5 h-5 ${isRunning ? 'text-primary' : ''}`} />
-            </button>
-          )}
+          <SidebarTimerButton showLabels={showLabels} />
 
           {showLabels ? (
             <div className="flex items-center justify-between pt-1">

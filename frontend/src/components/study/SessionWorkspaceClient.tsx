@@ -24,7 +24,9 @@ import {
   Dock,
   ExternalLink,
   CloudOff,
-  Keyboard
+  Keyboard,
+  FileText,
+  Type
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -37,6 +39,7 @@ import { FlashcardPrefill } from '@/components/study/FlashcardDeck';
 import { SessionSnapshot, Notes, Flashcard, QuizAttempt, ChatMessage } from '@/lib/types';
 import { api } from '@/lib/api';
 import { usePomodoro } from '@/context/PomodoroContext';
+import { useTheme } from '@/context/ThemeContext';
 import { useAuth, useEmailGate } from '@/context/AuthContext';
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
@@ -57,7 +60,7 @@ import {
   CachedSessionState
 } from '@/lib/sessionCache';
 
-type ViewMode = 'split' | 'notes' | 'flashcards' | 'quiz' | 'chat';
+type ViewMode = 'split' | 'pdf' | 'notes' | 'flashcards' | 'quiz' | 'chat';
 
 const panelFallback = (
   <div className="py-16 flex justify-center">
@@ -135,6 +138,7 @@ function snapshotFromCache(cached: CachedSessionState): SessionSnapshot {
 export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProps) {
   const router = useRouter();
   const { user } = useAuth();
+  const { theme, fontSize, cycleFontSize } = useTheme();
   const { allowed: aiAllowed } = useEmailGate();
   const {
     linkSession,
@@ -365,11 +369,14 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
     };
   }, [isChatDragging, chatPinned, chatMinimized, floatChatSize.width, floatChatSize.height, sessionId, scheduleDragCommit]);
 
-  // ── Link the focus timer to this session ─────────────────────────────────────
+  // ── Link the focus timer to this session (persists across section navigation) ─
   useEffect(() => {
-    linkSession(sessionId);
-    return () => linkSession(null);
-  }, [sessionId]);
+    if (snapshot?.session?.title) {
+      linkSession(sessionId, snapshot.session.title);
+    } else {
+      linkSession(sessionId);
+    }
+  }, [sessionId, snapshot?.session?.title, linkSession]);
 
   // ── Fetch snapshot, falling back to the offline cache ────────────────────────
   useEffect(() => {
@@ -677,6 +684,7 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
 
   const toolTabs = [
     { id: 'split',      label: 'Split View', icon: Columns,  count: 'Live' },
+    { id: 'pdf',        label: 'PDF Viewer', icon: FileText, count: document?.page_count ? `${document.page_count}p` : 'Viewer' },
     { id: 'notes',      label: 'Notes',      icon: BookOpen, count: notesGenerating ? '…' : notes ? 'Ready' : 'Pending' },
     { id: 'flashcards', label: 'Flashcards', icon: Layers,   count: flashcards.length > 0 ? `${flashcards.length}` : '—' },
     { id: 'quiz',       label: 'Quiz',       icon: Award,    count: quiz_attempts.length ? `${quiz_attempts[0].score}%` : '3 Modes' },
@@ -972,6 +980,15 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
             <Keyboard className="w-4 h-4" />
           </button>
 
+          <button
+            onClick={cycleFontSize}
+            title={`Font size: ${fontSize.toUpperCase()} (${fontSize === 'sm' ? '90%' : fontSize === 'lg' ? '112%' : fontSize === 'xl' ? '125%' : '100%'} · Click to change)`}
+            className="h-10 px-3.5 rounded-full flex items-center gap-1.5 border border-outline-variant text-on-surface-variant hover:text-primary hover:border-primary/40 transition-all text-xs font-bold"
+          >
+            <Type className="w-3.5 h-3.5" />
+            <span className="uppercase text-[11px] font-mono">{fontSize}</span>
+          </button>
+
           {isRunning ? (
             <button
               onClick={pauseTimer}
@@ -1031,23 +1048,46 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
       </div>
 
       {/* =========================================================================
-          VIEW MODE 1: RESIZABLE SPLIT WORKSPACE
+          VIEW MODE 1 & 2: RESIZABLE SPLIT WORKSPACE & FULL PDF VIEWER
           Always mounted – CSS visibility preserves scroll/zoom/split state
           ========================================================================= */}
-      <div className={viewMode === 'split' ? 'block' : 'hidden'}>
+      <div className={viewMode === 'split' || viewMode === 'pdf' ? 'block' : 'hidden'}>
+        {viewMode === 'pdf' && (
+          <div className="flex items-center justify-between p-3.5 rounded-2xl bg-surface-container-lowest border border-outline-variant text-xs mb-4 shadow-sm select-none animate-in fade-in">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                <FileText className="w-4 h-4" />
+              </div>
+              <div className="truncate">
+                <span className="font-bold text-on-surface">Full Document & PDF Reading View</span>
+                {document?.filename && (
+                  <span className="text-on-surface-variant ml-2 font-medium">({document.filename})</span>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={() => setViewMode('split')}
+              className="font-bold text-primary hover:text-primary/80 transition-colors flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-primary/10 shrink-0"
+            >
+              <Columns className="w-3.5 h-3.5" />
+              <span>Switch to Split View</span>
+            </button>
+          </div>
+        )}
+
         <div
           ref={splitContainerRef}
           className="flex flex-col xl:flex-row gap-0 xl:gap-4 min-h-0 items-start relative select-none"
         >
           <div
-            style={{ flex: `0 0 ${splitRatio}%` }}
-            className={`w-full xl:w-auto flex flex-col relative ${isHDragging ? 'pointer-events-none' : ''}`}
+            style={{ flex: viewMode === 'pdf' ? '1 1 100%' : `0 0 ${splitRatio}%` }}
+            className={`w-full xl:w-auto flex flex-col relative transition-[flex] duration-200 ${isHDragging ? 'pointer-events-none' : ''}`}
           >
             <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant overflow-hidden shadow-notebook-card">
               <DocumentViewer
                 document={document}
                 sessionTitle={session.title}
-                height={pdfHeight}
+                height={viewMode === 'pdf' ? Math.max(pdfHeight, 820) : pdfHeight}
                 onAskTutor={handleAskTutor}
                 onCreateFlashcard={handleCreateFlashcard}
                 onExplainConcept={handleExplainConcept}
@@ -1077,68 +1117,72 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
             </div>
           </div>
 
-          <div
-            onPointerDown={(e) => { e.preventDefault(); setIsHDragging(true); }}
-            className="hidden xl:flex items-center justify-center w-4 cursor-col-resize group self-stretch z-20 shrink-0"
-            title="Drag to resize columns"
-            style={{ minHeight: pdfHeight }}
-          >
-            <div
-              className={`w-1.5 h-16 rounded-full transition-transform duration-200 will-change-transform flex items-center justify-center ${
-                isHDragging ? 'bg-primary scale-y-125 shadow-md' : 'bg-outline-variant group-hover:bg-primary group-hover:scale-y-110'
-              }`}
-            >
-              <GripVertical className="w-3 h-3 text-on-primary opacity-0 group-hover:opacity-100 transition-opacity" />
-            </div>
-          </div>
-
-          <div
-            style={{ flex: `1 1 ${100 - splitRatio}%` }}
-            className={`w-full xl:w-auto flex flex-col gap-6 overflow-y-auto mt-6 xl:mt-0 pr-1 custom-scrollbar ${
-              isHDragging ? 'pointer-events-none' : ''
-            }`}
-          >
-            <CompactNotesCard
-              notes={notes}
-              generating={notesGenerating}
-              onOpenFullNotes={() => setViewMode('notes')}
-            />
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <CompactFlashcardCard
-                flashcards={flashcards}
-                onOpenDeck={() => setViewMode('flashcards')}
-                onQuickGenerate={() => setViewMode('flashcards')}
-              />
-              <CompactQuizCard quizAttempts={quiz_attempts} onOpenQuiz={() => setViewMode('quiz')} />
-            </div>
-
-            {!chatDetached && (
+          {viewMode === 'split' && (
+            <>
               <div
-                style={{ height: dockedChatHeight }}
-                className={dockedResize.isResizing ? '' : 'transition-[height] duration-150'}
+                onPointerDown={(e) => { e.preventDefault(); setIsHDragging(true); }}
+                className="hidden xl:flex items-center justify-center w-4 cursor-col-resize group self-stretch z-20 shrink-0"
+                title="Drag to resize columns"
+                style={{ minHeight: pdfHeight }}
               >
-                {chatPanel({ onDetach: handleDetachChat, footerSlot: dockedResizeGrip })}
-              </div>
-            )}
-
-            {chatDetached && (
-              <div className="border-2 border-dashed border-outline-variant rounded-3xl p-6 text-center space-y-3 bg-surface-container-lowest/60">
-                <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto">
-                  <ExternalLink className="w-5 h-5" />
-                </div>
-                <p className="text-sm font-semibold text-on-surface">AI Tutor is floating</p>
-                <p className="text-xs text-on-surface-variant">Drag it anywhere, or press Ctrl/⌘ + \ to dock it back.</p>
-                <button
-                  onClick={handleDockChat}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-on-primary text-xs font-bold hover:bg-primary-container transition-all"
+                <div
+                  className={`w-1.5 h-16 rounded-full transition-transform duration-200 will-change-transform flex items-center justify-center ${
+                    isHDragging ? 'bg-primary scale-y-125 shadow-md' : 'bg-outline-variant group-hover:bg-primary group-hover:scale-y-110'
+                  }`}
                 >
-                  <Dock className="w-3.5 h-3.5" />
-                  Dock Back
-                </button>
+                  <GripVertical className="w-3 h-3 text-on-primary opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
               </div>
-            )}
-          </div>
+
+              <div
+                style={{ flex: `1 1 ${100 - splitRatio}%` }}
+                className={`w-full xl:w-auto flex flex-col gap-6 overflow-y-auto mt-6 xl:mt-0 pr-1 custom-scrollbar ${
+                  isHDragging ? 'pointer-events-none' : ''
+                }`}
+              >
+                <CompactNotesCard
+                  notes={notes}
+                  generating={notesGenerating}
+                  onOpenFullNotes={() => setViewMode('notes')}
+                />
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <CompactFlashcardCard
+                    flashcards={flashcards}
+                    onOpenDeck={() => setViewMode('flashcards')}
+                    onQuickGenerate={() => setViewMode('flashcards')}
+                  />
+                  <CompactQuizCard quizAttempts={quiz_attempts} onOpenQuiz={() => setViewMode('quiz')} />
+                </div>
+
+                {!chatDetached && (
+                  <div
+                    style={{ height: dockedChatHeight }}
+                    className={dockedResize.isResizing ? '' : 'transition-[height] duration-150'}
+                  >
+                    {chatPanel({ onDetach: handleDetachChat, footerSlot: dockedResizeGrip })}
+                  </div>
+                )}
+
+                {chatDetached && (
+                  <div className="border-2 border-dashed border-outline-variant rounded-3xl p-6 text-center space-y-3 bg-surface-container-lowest/60">
+                    <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto">
+                      <ExternalLink className="w-5 h-5" />
+                    </div>
+                    <p className="text-sm font-semibold text-on-surface">AI Tutor is floating</p>
+                    <p className="text-xs text-on-surface-variant">Drag it anywhere, or press Ctrl/⌘ + \ to dock it back.</p>
+                    <button
+                      onClick={handleDockChat}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-on-primary text-xs font-bold hover:bg-primary-container transition-all"
+                    >
+                      <Dock className="w-3.5 h-3.5" />
+                      Dock Back
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
       </div>
 

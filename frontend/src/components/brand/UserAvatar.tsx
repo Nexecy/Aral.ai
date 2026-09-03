@@ -24,7 +24,8 @@ export function UserAvatar({
         alt={label}
         width={size}
         height={size}
-        className={`rounded-full object-cover shrink-0 ${className}`}
+        draggable={false}
+        className={`rounded-full object-cover shrink-0 select-none pointer-events-none ${className}`}
         style={{ width: size, height: size }}
       />
     );
@@ -32,7 +33,7 @@ export function UserAvatar({
 
   return (
     <div
-      className={`rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold shrink-0 shadow-sm ${className}`}
+      className={`rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold shrink-0 shadow-sm select-none ${className}`}
       style={{ width: size, height: size, fontSize: Math.max(10, size * 0.38) }}
       aria-label={label}
     >

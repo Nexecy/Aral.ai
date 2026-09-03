@@ -149,6 +149,63 @@
     background-color: rgba(79, 70, 229, 0.15);
     color: #1e293b;
   }
+
+  /* Page font-size scaling tokens */
+  html[data-font-size="sm"] {
+    font-size: 14.4px;
+  }
+  html[data-font-size="md"] {
+    font-size: 16px;
+  }
+  html[data-font-size="lg"] {
+    font-size: 18px;
+  }
+  html[data-font-size="xl"] {
+    font-size: 20px;
+  }
+
+  /* Prevent asset and logo dragging for native app feel */
+  img,
+  svg,
+  picture,
+  video,
+  canvas {
+    -webkit-user-drag: none;
+    -khtml-user-drag: none;
+    -moz-user-drag: none;
+    -o-user-drag: none;
+    user-drag: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  /* Make navigation, headers, sidebars, buttons, and badges behave like native desktop/mobile app chrome */
+  header,
+  nav,
+  aside,
+  button,
+  [role="button"],
+  [role="tab"],
+  [role="menuitem"] {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    -webkit-user-drag: none;
+    user-drag: none;
+  }
+
+  /* Keep study notes, text content, chat messages, and inputs selectable */
+  input,
+  textarea,
+  [contenteditable="true"],
+  .selectable-text,
+  .prose {
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+    user-select: text;
+  }
 }
 
 /* 3D Flip Card Styles */

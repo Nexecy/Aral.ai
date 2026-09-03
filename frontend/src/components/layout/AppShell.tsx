@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Loader2, Timer } from 'lucide-react';
+import { Loader2, Timer, ArrowRight } from 'lucide-react';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { LeftNavbar } from './LeftNavbar';
 import { PomodoroWidget } from './PomodoroWidget';
@@ -39,8 +40,21 @@ const GUEST_ONLY_PATHS = [
   '/forgot-password/'
 ];
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+function TopNavPomodoroButton() {
   const { isRunning, formattedTime, toggleWidget } = usePomodoro();
+  return (
+    <button
+      onClick={toggleWidget}
+      className="flex items-center gap-2.5 bg-surface-container-low hover:bg-surface-container text-foreground px-5 py-2 rounded-full text-xs font-mono font-bold border border-border transition-colors group"
+      aria-label="Toggle Focus Timer"
+    >
+      <Timer className={`w-4 h-4 ${isRunning ? 'text-primary animate-pulse' : 'text-primary'}`} />
+      <span>{formattedTime}</span>
+    </button>
+  );
+}
+
+export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
@@ -107,14 +121,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <GlobalKnowledgeSearch ref={searchRef} />
 
         <div className="flex items-center gap-6">
-          <button
-            onClick={toggleWidget}
-            className="flex items-center gap-2.5 bg-surface-container-low hover:bg-surface-container text-foreground px-5 py-2 rounded-full text-xs font-mono font-bold border border-border transition-colors group"
-          >
-            <Timer className={`w-4 h-4 ${isRunning ? 'text-primary animate-pulse' : 'text-primary'}`} />
-            <span>{formattedTime}</span>
-          </button>
-
+          <TopNavPomodoroButton />
           <TopNavMenus />
         </div>
       </header>

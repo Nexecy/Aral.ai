@@ -20,9 +20,18 @@ import {
   AuthSession
 } from './types';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
+
+interface CacheEntry<T = unknown> {
+  data: T;
+  timestamp: number;
+  ttl: number;
+}
 
 class ApiClient {
+  private cache = new Map<string, CacheEntry>();
+  private inFlight = new Map<string, Promise<unknown>>();
+
   private getToken(): string | null {
     if (typeof window === 'undefined') return null;
     return localStorage.getItem('aral_auth_token');
@@ -38,6 +47,19 @@ class ApiClient {
     return headers;
   }
 
+  /** Invalidate in-memory cache entries matching prefix, or all if no prefix provided. */
+  public invalidateCache(prefix?: string): void {
+    if (!prefix) {
+      this.cache.clear();
+      return;
+    }
+    this.cache.forEach((_, key) => {
+      if (key.startsWith(prefix)) {
+        this.cache.delete(key);
+      }
+    });
+  }
+
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${API_BASE}${endpoint}`;
     const headers = {
@@ -45,10 +67,33 @@ class ApiClient {
       ...options.headers
     };
 
-    const res = await fetch(url, {
-      ...options,
-      headers
-    });
+    const controller = new AbortController();
+    const timeoutTimer = setTimeout(() => controller.abort(), 60000);
+    const signal = options.signal || controller.signal;
+
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        ...options,
+        headers,
+        signal
+      });
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        throw new Error(`Request timed out while connecting to ${url}`);
+      }
+      if (
+        err instanceof TypeError ||
+        (err?.message && /failed to fetch|networkerror|load failed/i.test(err.message))
+      ) {
+        throw new Error(
+          `Unable to connect to Aral.ai API at ${API_BASE}. If running locally, please ensure the backend is started (e.g. run "python start_dev.py" or "python -m uvicorn app.main:app --port 8000").`
+        );
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeoutTimer);
+    }
 
     if (!res.ok) {
       let errorMessage = `API Error: ${res.status} ${res.statusText}`;
@@ -70,11 +115,40 @@ class ApiClient {
     return res.json() as Promise<T>;
   }
 
+  /**
+   * Cached GET request with in-flight deduplication and short TTL.
+   * Eliminates redundant network queries across page navigation.
+   */
+  private async cachedRequest<T>(endpoint: string, ttlMs = 20000): Promise<T> {
+    const now = Date.now();
+    const existing = this.cache.get(endpoint);
+    if (existing && now - existing.timestamp < existing.ttl) {
+      return existing.data as T;
+    }
+
+    if (this.inFlight.has(endpoint)) {
+      return this.inFlight.get(endpoint) as Promise<T>;
+    }
+
+    const promise = (async () => {
+      try {
+        const data = await this.request<T>(endpoint);
+        this.cache.set(endpoint, { data, timestamp: Date.now(), ttl: ttlMs });
+        return data;
+      } finally {
+        this.inFlight.delete(endpoint);
+      }
+    })();
+
+    this.inFlight.set(endpoint, promise as Promise<unknown>);
+    return promise;
+  }
+
   // ---------------------------------------------------------------------------
   // Auth & System Status
   // ---------------------------------------------------------------------------
   async getMe(): Promise<User & { has_supabase: boolean; has_gemini: boolean; gemini_model: string }> {
-    return this.request('/auth/me');
+    return this.cachedRequest('/auth/me', 15000);
   }
 
   async updateProfile(payload: {
@@ -83,6 +157,7 @@ class ApiClient {
     gender?: string | null;
     theme?: string | null;
   }): Promise<User & { has_supabase: boolean; has_gemini: boolean; gemini_model: string }> {
+    this.invalidateCache('/auth');
     return this.request('/auth/profile', {
       method: 'PATCH',
       body: JSON.stringify(payload)
@@ -90,6 +165,7 @@ class ApiClient {
   }
 
   async uploadAvatar(file: File): Promise<User & { has_supabase: boolean; has_gemini: boolean; gemini_model: string }> {
+    this.invalidateCache('/auth');
     const formData = new FormData();
     formData.append('file', file);
     return this.request('/auth/avatar', {
@@ -158,24 +234,85 @@ class ApiClient {
     return this.request('/auth/status');
   }
 
-  // ---------------------------------------------------------------------------
-  // Documents
-  // ---------------------------------------------------------------------------
-  async uploadDocument(file: File): Promise<Document> {
-    const formData = new FormData();
-    formData.append('file', file);
-    return this.request<Document>('/documents/upload', {
-      method: 'POST',
-      body: formData
+  async uploadDocument(
+    file: File,
+    onProgress?: (progress: { percent: number; loaded: number; total: number }) => void
+  ): Promise<Document> {
+    this.invalidateCache('/documents');
+    return new Promise<Document>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      const url = `${API_BASE}/documents/upload`;
+      xhr.open('POST', url);
+
+      const token = this.getToken();
+      if (token) {
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      }
+
+      if (xhr.upload && onProgress) {
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable && event.total > 0) {
+            const percent = Math.min(100, Math.round((event.loaded / event.total) * 100));
+            onProgress({
+              percent,
+              loaded: event.loaded,
+              total: event.total
+            });
+          }
+        };
+      }
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const data = JSON.parse(xhr.responseText) as Document;
+            this.invalidateCache('/documents');
+            resolve(data);
+          } catch {
+            reject(new Error('Invalid JSON response from server'));
+          }
+        } else {
+          let errorMessage = `API Error: ${xhr.status} ${xhr.statusText}`;
+          try {
+            const errorData = JSON.parse(xhr.responseText);
+            if (typeof errorData.detail === 'string') errorMessage = errorData.detail;
+            else if (Array.isArray(errorData.detail)) {
+              errorMessage = errorData.detail
+                .map((item: { msg?: string }) => item?.msg)
+                .filter(Boolean)
+                .join(' ');
+            }
+          } catch {
+            // keep fallback
+          }
+          reject(new Error(errorMessage));
+        }
+      };
+
+      xhr.onerror = () => {
+        reject(
+          new Error(
+            `Unable to connect to Aral.ai API at ${API_BASE}. If running locally, please ensure the backend is started (e.g. run "python start_dev.py" or "python -m uvicorn app.main:app --port 8000"). If using a remote backend, verify NEXT_PUBLIC_API_URL in frontend/.env.local.`
+          )
+        );
+      };
+
+      xhr.ontimeout = () => {
+        reject(new Error('Document upload request timed out. Please try again.'));
+      };
+
+      const formData = new FormData();
+      formData.append('file', file);
+      xhr.send(formData);
     });
   }
 
   async getDocuments(): Promise<Document[]> {
-    return this.request<Document[]>('/documents');
+    return this.cachedRequest<Document[]>('/documents', 15000);
   }
 
   async getDocument(id: string): Promise<Document> {
-    return this.request<Document>(`/documents/${id}`);
+    return this.cachedRequest<Document>(`/documents/${id}`, 30000);
   }
 
   /**
@@ -194,6 +331,8 @@ class ApiClient {
   // Sessions
   // ---------------------------------------------------------------------------
   async createSession(title: string, documentId?: string | null): Promise<Session> {
+    this.invalidateCache('/sessions');
+    this.invalidateCache('/dashboard');
     return this.request<Session>('/sessions', {
       method: 'POST',
       body: JSON.stringify({ title, document_id: documentId || null })
@@ -202,6 +341,9 @@ class ApiClient {
 
   async getSessions(query?: string): Promise<Session[]> {
     const q = query ? `?q=${encodeURIComponent(query)}` : '';
+    if (!query) {
+      return this.cachedRequest<Session[]>('/sessions', 15000);
+    }
     return this.request<Session[]>(`/sessions${q}`);
   }
 
@@ -210,6 +352,8 @@ class ApiClient {
   }
 
   async updateSession(sessionId: string, updates: { title?: string; status?: SessionStatus }): Promise<Session> {
+    this.invalidateCache('/sessions');
+    this.invalidateCache('/dashboard');
     return this.request<Session>(`/sessions/${sessionId}`, {
       method: 'PATCH',
       body: JSON.stringify(updates)
@@ -218,6 +362,8 @@ class ApiClient {
 
   /** Close out a session: flip status, stamp ended_at, and sync final focus/review metrics. */
   async endSession(sessionId: string, payload: SessionEndPayload = {}): Promise<Session> {
+    this.invalidateCache('/sessions');
+    this.invalidateCache('/dashboard');
     return this.request<Session>(`/sessions/${sessionId}/end`, {
       method: 'POST',
       body: JSON.stringify({
@@ -229,6 +375,8 @@ class ApiClient {
   }
 
   async deleteSession(sessionId: string): Promise<{ status: string; message: string }> {
+    this.invalidateCache('/sessions');
+    this.invalidateCache('/dashboard');
     return this.request<{ status: string; message: string }>(`/sessions/${sessionId}`, {
       method: 'DELETE'
     });
@@ -242,6 +390,7 @@ class ApiClient {
   // Notes
   // ---------------------------------------------------------------------------
   async generateNotes(sessionId: string, scope = 'full document'): Promise<Notes> {
+    this.invalidateCache('/sessions');
     return this.request<Notes>(`/sessions/${sessionId}/notes/generate?scope=${encodeURIComponent(scope)}`, {
       method: 'POST'
     });
@@ -365,8 +514,19 @@ class ApiClient {
           }
         }
       }
-    } catch (err) {
-      onError(err);
+    } catch (err: any) {
+      if (
+        err instanceof TypeError ||
+        (err?.message && /failed to fetch|networkerror|load failed/i.test(err.message))
+      ) {
+        onError(
+          new Error(
+            `Unable to connect to Aral.ai API at ${API_BASE}. If running locally, please ensure the backend is started (e.g. run "python start_dev.py" or "python -m uvicorn app.main:app --port 8000"). If using a remote backend, verify NEXT_PUBLIC_API_URL in frontend/.env.local.`
+          )
+        );
+      } else {
+        onError(err);
+      }
     }
   }
 
@@ -374,6 +534,8 @@ class ApiClient {
   // Pomodoro
   // ---------------------------------------------------------------------------
   async logPomodoro(durationMinutes: number, sessionId?: string | null, completed = true) {
+    this.invalidateCache('/pomodoro');
+    this.invalidateCache('/dashboard');
     return this.request('/pomodoro/log', {
       method: 'POST',
       body: JSON.stringify({ duration_minutes: durationMinutes, session_id: sessionId || null, completed })
@@ -386,10 +548,11 @@ class ApiClient {
   }
 
   async getPomodoroSettings(): Promise<PomodoroSettings> {
-    return this.request<PomodoroSettings>('/pomodoro/settings');
+    return this.cachedRequest<PomodoroSettings>('/pomodoro/settings', 60000);
   }
 
   async updatePomodoroSettings(settings: Partial<PomodoroSettings>): Promise<PomodoroSettings> {
+    this.invalidateCache('/pomodoro');
     return this.request<PomodoroSettings>('/pomodoro/settings', {
       method: 'PUT',
       body: JSON.stringify(settings)
@@ -400,10 +563,12 @@ class ApiClient {
   // Exams & Dashboard
   // ---------------------------------------------------------------------------
   async getExams(): Promise<Exam[]> {
-    return this.request<Exam[]>('/exams');
+    return this.cachedRequest<Exam[]>('/exams', 20000);
   }
 
   async createExam(payload: ExamInput): Promise<Exam> {
+    this.invalidateCache('/exams');
+    this.invalidateCache('/dashboard');
     return this.request<Exam>('/exams', {
       method: 'POST',
       body: JSON.stringify(payload)
@@ -411,6 +576,8 @@ class ApiClient {
   }
 
   async updateExam(examId: string, payload: Partial<ExamInput>): Promise<Exam> {
+    this.invalidateCache('/exams');
+    this.invalidateCache('/dashboard');
     return this.request<Exam>(`/exams/${examId}`, {
       method: 'PATCH',
       body: JSON.stringify(payload)
@@ -418,11 +585,13 @@ class ApiClient {
   }
 
   async deleteExam(examId: string): Promise<{ status: string; message: string }> {
+    this.invalidateCache('/exams');
+    this.invalidateCache('/dashboard');
     return this.request(`/exams/${examId}`, { method: 'DELETE' });
   }
 
   async getDashboardSummary(): Promise<DashboardSummary> {
-    return this.request<DashboardSummary>('/dashboard/summary');
+    return this.cachedRequest<DashboardSummary>('/dashboard/summary', 15000);
   }
 }
 

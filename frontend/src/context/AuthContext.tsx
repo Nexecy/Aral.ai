@@ -101,13 +101,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    let active = true;
+
+    // Safety watchdog timer: guarantees loading state clears even on sluggish/broken networks
+    const watchdog = setTimeout(() => {
+      if (active) setLoading(false);
+    }, 2500);
+
     async function initAuth() {
       try {
         const params = readAuthRedirect();
         try {
           if (params.code) {
             const session = await api.exchangeCode(params.code);
-            if (session.access_token) await applySession(session.access_token);
+            if (session.access_token && active) await applySession(session.access_token);
             clearAuthRedirectFromUrl();
             if (params.type === 'recovery' && !window.location.pathname.includes('reset-password')) {
               window.location.replace('/reset-password/');
@@ -116,7 +123,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             return;
           }
           if (params.accessToken) {
-            await applySession(params.accessToken);
+            if (active) await applySession(params.accessToken);
             clearAuthRedirectFromUrl();
             if (params.type === 'recovery' && !window.location.pathname.includes('reset-password')) {
               window.location.replace('/reset-password/');
@@ -130,31 +137,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const savedToken = localStorage.getItem('aral_auth_token');
         if (!savedToken) {
-          persistUser(null);
-          setUser(null);
-          setToken(null);
+          if (active) {
+            persistUser(null);
+            setUser(null);
+            setToken(null);
+          }
           return;
         }
 
         const cachedUser = readCachedUser();
-        if (cachedUser) {
+        if (cachedUser && active) {
           setToken(savedToken);
           setUser(cachedUser);
           setLoading(false);
         }
 
-        await applySession(savedToken);
+        if (active) {
+          await applySession(savedToken);
+        }
       } catch {
-        persistToken(null);
-        persistUser(null);
-        setToken(null);
-        setUser(null);
-        setSystemStatus(null);
+        if (active) {
+          persistToken(null);
+          persistUser(null);
+          setToken(null);
+          setUser(null);
+          setSystemStatus(null);
+        }
       } finally {
-        setLoading(false);
+        if (active) {
+          setLoading(false);
+        }
       }
     }
+
     void initAuth();
+
+    return () => {
+      active = false;
+      clearTimeout(watchdog);
+    };
   }, [applySession]);
 
   const login = async (email: string, password: string) => {

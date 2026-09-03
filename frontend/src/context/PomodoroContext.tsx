@@ -28,6 +28,7 @@ interface PomodoroContextType {
   isWidgetOpen: boolean;
   isMinimized: boolean;
   currentSessionId: string | null;
+  activeSessionTitle: string | null;
   cyclesCompleted: number;
   /** Focused work seconds accrued for the currently linked session. */
   sessionFocusSeconds: number;
@@ -39,7 +40,7 @@ interface PomodoroContextType {
   toggleWidget: () => void;
   toggleMinimize: () => void;
   setTimerMode: (mode: TimerMode) => void;
-  linkSession: (sessionId: string | null) => void;
+  linkSession: (sessionId: string | null, title?: string | null) => void;
   resetSessionFocus: () => void;
   updateSettings: (newSettings: Partial<PomodoroSettings>) => Promise<void>;
   formattedTime: string;
@@ -56,6 +57,7 @@ export function PomodoroProvider({ children }: { children: React.ReactNode }) {
   const [isWidgetOpen, setIsWidgetOpen] = useState<boolean>(false);
   const [isMinimized, setIsMinimized] = useState<boolean>(false);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [activeSessionTitle, setActiveSessionTitle] = useState<string | null>(null);
   const [cyclesCompleted, setCyclesCompleted] = useState<number>(0);
   const [sessionFocusSeconds, setSessionFocusSeconds] = useState<number>(0);
 
@@ -72,7 +74,7 @@ export function PomodoroProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Load custom settings on mount
+  // Load custom settings and restore active session link on mount
   useEffect(() => {
     async function loadSettings() {
       try {
@@ -81,6 +83,18 @@ export function PomodoroProvider({ children }: { children: React.ReactNode }) {
           const parsed = JSON.parse(savedLocal);
           setSettings((prev) => ({ ...prev, ...parsed }));
           setTimeLeft(parsed.study_minutes ? parsed.study_minutes * 60 : 25 * 60);
+        }
+
+        const savedSessionId = localStorage.getItem('aral_active_session_id');
+        const savedSessionTitle = localStorage.getItem('aral_active_session_title');
+        const savedFocusSecs = localStorage.getItem('aral_session_focus_seconds');
+        if (savedSessionId) {
+          setCurrentSessionId(savedSessionId);
+          if (savedSessionTitle) setActiveSessionTitle(savedSessionTitle);
+          if (savedFocusSecs) {
+            const n = parseInt(savedFocusSecs, 10);
+            if (!isNaN(n)) setSessionFocusSeconds(n);
+          }
         }
         const serverSettings = await api.getPomodoroSettings();
         if (serverSettings) {
@@ -112,7 +126,13 @@ export function PomodoroProvider({ children }: { children: React.ReactNode }) {
       timerRef.current = setInterval(() => {
         // Only work intervals inside a linked session count toward focus time.
         if (mode === 'work' && currentSessionId) {
-          setSessionFocusSeconds((prev) => prev + 1);
+          setSessionFocusSeconds((prev) => {
+            const next = prev + 1;
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('aral_session_focus_seconds', String(next));
+            }
+            return next;
+          });
         }
         setTimeLeft((prev) => {
           if (prev <= 1) {
@@ -160,14 +180,12 @@ export function PomodoroProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (mode === 'work') {
-      setCyclesCompleted(nextCycleCount);
-
-      // Log to backend
       try {
         await api.logPomodoro(settings.study_minutes, currentSessionId, true);
       } catch (e) {
         console.error('Failed to log pomodoro:', e);
       }
+      setCyclesCompleted(nextCycleCount);
 
       // Check if time for long break
       const nextMode: TimerMode = isLongBreak ? 'long_break' : 'short_break';
@@ -202,15 +220,35 @@ export function PomodoroProvider({ children }: { children: React.ReactNode }) {
     setTimeLeft(getSecondsForMode(newMode, settings));
   };
 
-  const linkSession = (sessionId: string | null) => {
-    setCurrentSessionId((prev) => {
-      // Switching to a different session starts a fresh focus tally.
-      if (sessionId && prev !== sessionId) setSessionFocusSeconds(0);
-      return sessionId;
-    });
+  const linkSession = (sessionId: string | null, title?: string | null) => {
+    if (sessionId) {
+      setCurrentSessionId((prev) => {
+        if (prev !== sessionId) setSessionFocusSeconds(0);
+        return sessionId;
+      });
+      if (title) setActiveSessionTitle(title);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('aral_active_session_id', sessionId);
+        if (title) localStorage.setItem('aral_active_session_title', title);
+      }
+    } else {
+      setCurrentSessionId(null);
+      setActiveSessionTitle(null);
+      setSessionFocusSeconds(0);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('aral_active_session_id');
+        localStorage.removeItem('aral_active_session_title');
+        localStorage.removeItem('aral_session_focus_seconds');
+      }
+    }
   };
 
-  const resetSessionFocus = () => setSessionFocusSeconds(0);
+  const resetSessionFocus = () => {
+    setSessionFocusSeconds(0);
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('aral_session_focus_seconds');
+    }
+  };
 
   const updateSettings = async (newSettings: Partial<PomodoroSettings>) => {
     const merged = { ...settings, ...newSettings };
@@ -239,6 +277,7 @@ export function PomodoroProvider({ children }: { children: React.ReactNode }) {
         isWidgetOpen,
         isMinimized,
         currentSessionId,
+        activeSessionTitle,
         cyclesCompleted,
         sessionFocusSeconds,
         settings,

@@ -6,11 +6,16 @@ const nextConfig = {
   // Next.js build so runtime routes like /session/<uuid>/ resolve.
   output: isVercel ? undefined : process.env.NODE_ENV === 'production' ? 'export' : undefined,
   trailingSlash: true,
+  poweredByHeader: false,
+  compress: true,
   images: {
     unoptimized: true,
   },
   reactStrictMode: true,
   transpilePackages: ['canvas-confetti'],
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production' ? { exclude: ['error', 'warn'] } : false,
+  },
 };
 
 export default nextConfig;

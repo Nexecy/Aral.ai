@@ -32,7 +32,7 @@ export function BrandLogo({
 
   const mark = (
     <span
-      className="relative inline-block shrink-0"
+      className="relative inline-block shrink-0 select-none"
       style={{ width: size, height: size }}
       role={showWordmark ? undefined : 'img'}
       aria-label={showWordmark ? undefined : 'Aral.ai'}
@@ -42,7 +42,8 @@ export function BrandLogo({
         alt=""
         width={size}
         height={size}
-        className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-200 ${
+        draggable={false}
+        className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-200 pointer-events-none select-none ${
           useWhite ? 'opacity-0' : 'opacity-100'
         }`}
       />
@@ -51,7 +52,8 @@ export function BrandLogo({
         alt=""
         width={size}
         height={size}
-        className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-200 ${
+        draggable={false}
+        className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-200 pointer-events-none select-none ${
           useWhite ? 'opacity-100' : 'opacity-0'
         }`}
       />
@@ -65,18 +67,18 @@ export function BrandLogo({
   );
 
   const label = showWordmark ? (
-    <div className={align === 'center' ? 'text-center' : undefined}>
+    <div className={`select-none ${align === 'center' ? 'text-center' : ''}`}>
       {asHeading ? (
-        <h1 className={`font-bold tracking-tight text-foreground leading-none ${wordmarkClassName}`}>
+        <h1 className={`font-bold tracking-tight text-foreground leading-none select-none ${wordmarkClassName}`}>
           {wordmark}
         </h1>
       ) : (
-        <div className={`font-bold tracking-tight text-foreground leading-none ${wordmarkClassName}`}>
+        <div className={`font-bold tracking-tight text-foreground leading-none select-none ${wordmarkClassName}`}>
           {wordmark}
         </div>
       )}
       {subtitle && (
-        <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mt-1">
+        <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mt-1 select-none">
           {subtitle}
         </div>
       )}
@@ -85,7 +87,7 @@ export function BrandLogo({
 
   const content = (
     <span
-      className={`inline-flex items-center gap-3 ${
+      className={`inline-flex items-center gap-3 select-none ${
         align === 'center' ? 'flex-col gap-2' : ''
       }`}
     >
@@ -97,7 +99,7 @@ export function BrandLogo({
   if (!href) return content;
 
   return (
-    <Link href={href} className="inline-flex items-center no-underline">
+    <Link href={href} draggable={false} className="inline-flex items-center no-underline select-none">
       {content}
     </Link>
   );

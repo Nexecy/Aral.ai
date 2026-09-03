@@ -1,6 +1,6 @@
 """
 Aral.ai — Unified Development Server Launcher
-Launches FastAPI backend (port 8000) and Next.js frontend (port 3000) concurrently.
+Launches FastAPI backend (port 8000) and Next.js frontend (port 3005) concurrently.
 """
 import subprocess
 import sys
@@ -23,7 +23,7 @@ def main():
     print(" 🚀 Starting Aral.ai Full-Stack Development Environment")
     print("==================================================================")
     print(f" • Backend:  http://localhost:8000 (Docs: http://localhost:8000/docs)")
-    print(f" • Frontend: http://localhost:3000")
+    print(f" • Frontend: http://localhost:3005")
     print("==================================================================")
 
     # 1. Start FastAPI Backend

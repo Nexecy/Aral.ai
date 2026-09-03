@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import { UploadCloud, FileText, Image as ImageIcon, File, CheckCircle2, AlertCircle, Loader2, Sparkles, ArrowRight } from 'lucide-react';
+import { UploadCloud, FileText, Image as ImageIcon, File, AlertCircle } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Document, Session } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 import { useEmailGate } from '@/context/AuthContext';
+import { UploadProgressBar, UploadFileMeta } from './UploadProgressBar';
 
 const ACCEPTED_TYPES = [
   'application/pdf',
@@ -16,13 +17,6 @@ const ACCEPTED_TYPES = [
 ];
 
 const ACCEPTED_EXTENSIONS = ['.pdf', '.docx', '.doc', '.txt', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.tiff', '.tif'];
-
-function getFileIcon(filename: string) {
-  const ext = filename.toLowerCase();
-  if (ext.endsWith('.pdf')) return FileText;
-  if (ext.endsWith('.docx') || ext.endsWith('.doc')) return File;
-  return ImageIcon;
-}
 
 function isValidFile(file: File): boolean {
   const name = file.name.toLowerCase();
@@ -40,9 +34,13 @@ export function DocumentUploader({ onUploadSuccess }: DocumentUploaderProps) {
   const { allowed: aiAllowed } = useEmailGate();
   const [dragActive, setDragActive] = useState<boolean>(false);
   const [uploading, setUploading] = useState<boolean>(false);
+  const [selectedFile, setSelectedFile] = useState<UploadFileMeta | null>(null);
+  const [uploadPercent, setUploadPercent] = useState<number>(0);
+  const [uploadStage, setUploadStage] = useState<string>('');
+  const [byteProgress, setByteProgress] = useState<{ loaded: number; total: number } | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<'uploading' | 'processing' | 'success' | 'error'>('uploading');
   const [error, setError] = useState<string | null>(null);
-  const [progressStep, setProgressStep] = useState<string>('');
-  
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleDrag = (e: React.DragEvent) => {
@@ -71,6 +69,19 @@ export function DocumentUploader({ onUploadSuccess }: DocumentUploaderProps) {
     }
   };
 
+  const resetState = () => {
+    setUploading(false);
+    setSelectedFile(null);
+    setUploadPercent(0);
+    setUploadStage('');
+    setByteProgress(null);
+    setUploadStatus('uploading');
+    setError(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   const processFile = async (file: File) => {
     if (!isValidFile(file)) {
       setError('Unsupported file type. Please upload a PDF, Word document (.docx), or image file (PNG, JPG, WEBP, GIF, BMP, TIFF).');
@@ -83,35 +94,54 @@ export function DocumentUploader({ onUploadSuccess }: DocumentUploaderProps) {
     }
 
     setError(null);
+    setSelectedFile({ name: file.name, size: file.size });
     setUploading(true);
-    setProgressStep('Uploading document to storage...');
+    setUploadStatus('uploading');
+    setUploadPercent(5);
+    setUploadStage('Uploading document to storage...');
+    setByteProgress({ loaded: 0, total: file.size });
 
     try {
-      // 1. Upload & Extract Text with PyMuPDF
-      setProgressStep('Extracting text & structure with PyMuPDF...');
-      const doc = await api.uploadDocument(file);
+      // 1. Upload & Extract Text with PyMuPDF (tracks real XHR byte upload progress up to 70%)
+      const doc = await api.uploadDocument(file, (prog) => {
+        // Map network upload 0..100% to UI 5..70%
+        const mappedPercent = Math.min(70, Math.max(5, Math.round(5 + (prog.percent * 0.65))));
+        setUploadPercent(mappedPercent);
+        setByteProgress({ loaded: prog.loaded, total: prog.total });
+        setUploadStage(`Uploading document... ${prog.percent}%`);
+      });
 
-      // 2. Create Study Session
-      setProgressStep('Initializing study session workspace...');
+      // 2. Server parsing & structure extraction phase
+      setUploadStatus('processing');
+      setUploadPercent(75);
+      setUploadStage('Extracting text & structure with PyMuPDF...');
+
+      // 3. Create Study Session Workspace
+      setUploadPercent(88);
+      setUploadStage('Initializing study session workspace...');
       const sessionTitle = file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ');
       const session = await api.createSession(sessionTitle, doc.id);
 
-      // Kick off notes in the background so the workspace can open immediately.
+      // Kick off notes in the background
       if (aiAllowed) {
         void api.generateNotes(session.id).catch(() => {});
       }
 
-      setProgressStep('Opening workspace...');
-      if (onUploadSuccess) {
-        onUploadSuccess(doc, session);
-      } else {
-        router.push(`/session/${session.id}/`);
-      }
+      // 4. Ready & Redirect
+      setUploadPercent(100);
+      setUploadStatus('success');
+      setUploadStage('Ready! Opening study workspace...');
+
+      setTimeout(() => {
+        if (onUploadSuccess) {
+          onUploadSuccess(doc, session);
+        } else {
+          router.push(`/session/${session.id}/`);
+        }
+      }, 400);
     } catch (err: any) {
+      setUploadStatus('error');
       setError(err.message || 'Failed to upload and process document.');
-    } finally {
-      setUploading(false);
-      setProgressStep('');
     }
   };
 
@@ -122,8 +152,10 @@ export function DocumentUploader({ onUploadSuccess }: DocumentUploaderProps) {
         onDragLeave={handleDrag}
         onDragOver={handleDrag}
         onDrop={handleDrop}
-        onClick={() => fileInputRef.current?.click()}
-        className={`relative border-2 border-dashed rounded-2xl p-8 sm:p-12 text-center cursor-pointer transition-all duration-200 ${
+        onClick={() => !uploading && fileInputRef.current?.click()}
+        className={`relative border-2 border-dashed rounded-2xl p-8 sm:p-12 text-center transition-all duration-200 ${
+          uploading ? 'cursor-default' : 'cursor-pointer'
+        } ${
           dragActive
             ? 'border-primary bg-primary/5 scale-[1.01]'
             : 'border-border bg-card hover:border-primary/50 hover:bg-muted/30 shadow-notion-soft'
@@ -135,19 +167,20 @@ export function DocumentUploader({ onUploadSuccess }: DocumentUploaderProps) {
           accept=".pdf,.docx,.doc,.txt,.png,.jpg,.jpeg,.webp,.gif,.bmp,.tiff,.tif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword,text/plain,image/*"
           className="hidden"
           onChange={handleChange}
-          disabled={uploading}
+          disabled={uploading && uploadStatus !== 'error'}
         />
 
-        {uploading ? (
-          <div className="py-4 flex flex-col items-center justify-center space-y-4">
-            <div className="relative">
-              <div className="w-16 h-16 rounded-full border-4 border-primary/20 border-t-primary animate-spin flex items-center justify-center" />
-              <Sparkles className="w-6 h-6 text-primary absolute inset-0 m-auto animate-pulse" />
-            </div>
-            <div className="space-y-1">
-              <h4 className="font-bold text-lg text-foreground">Processing Study Material</h4>
-              <p className="text-sm text-muted-foreground animate-pulse">{progressStep}</p>
-            </div>
+        {uploading && selectedFile ? (
+          <div className="py-2 flex flex-col items-center justify-center">
+            <UploadProgressBar
+              file={selectedFile}
+              percent={uploadPercent}
+              stage={uploadStage}
+              byteProgress={byteProgress}
+              status={uploadStatus}
+              errorMessage={error}
+              onRetry={resetState}
+            />
           </div>
         ) : (
           <div className="space-y-4">
@@ -184,7 +217,7 @@ export function DocumentUploader({ onUploadSuccess }: DocumentUploaderProps) {
         )}
       </div>
 
-      {error && (
+      {error && !uploading && (
         <div className="mt-3 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm flex items-center gap-2 animate-in fade-in">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{error}</span>
