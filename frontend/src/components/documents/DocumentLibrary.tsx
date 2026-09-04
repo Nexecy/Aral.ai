@@ -85,7 +85,9 @@ export function DocumentLibrary({
 
   // Find linked session for a document
   const getSessionForDoc = (docId: string) => {
-    return sessions.find((s) => s.document_id === docId);
+    const matches = sessions.filter((s) => s.document_id === docId || s.document?.id === docId);
+    if (matches.length === 0) return null;
+    return matches[0];
   };
 
   const handleStartStudy = async (doc: Document) => {
@@ -99,7 +101,7 @@ export function DocumentLibrary({
       const session = await api.createSession(title, doc.id);
       router.push(`/session/${session.id}/`);
     } catch (err) {
-      console.error('Failed to create session from document:', err);
+      console.error('Failed to create or open session from document:', err);
     }
   };
 

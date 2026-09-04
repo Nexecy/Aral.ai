@@ -29,16 +29,26 @@ async def _owned_session(session_id: str, user_id: str) -> Dict[str, Any]:
 @router.post("", response_model=SessionResponse)
 async def create_session(
     payload: SessionCreate,
+    force_new: bool = Query(False, description="Whether to create a new session rather than reusing existing"),
     user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
     Create a new study session linked to a document.
+    Reuses the existing canonical session for the document if already present to prevent clashing and duplicates.
     """
     document = None
     if payload.document_id:
         document = await db_service.get_document(payload.document_id)
         if not document or document.get("user_id") != user["id"]:
             raise HTTPException(status_code=404, detail="Document not found")
+
+    if not force_new and payload.document_id:
+        existing = await db_service.get_session_by_document(user["id"], payload.document_id)
+        if existing:
+            await db_service.update_session_access(existing["id"])
+            if document:
+                existing["document"] = document
+            return existing
 
     session = await db_service.create_session(
         user_id=user["id"],

@@ -177,6 +177,61 @@ class DBService:
     # --------------------------------------------------------------------------
     # Session Operations
     # --------------------------------------------------------------------------
+    async def get_session_by_document(self, user_id: str, document_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Find existing session for this user and document. If duplicate sessions exist,
+        returns the canonical session with notes/cards and cleans up empty duplicates.
+        """
+        if not document_id:
+            return None
+
+        candidates: List[Dict[str, Any]] = []
+        if self.supabase:
+            try:
+                res = self.supabase.table("sessions").select(SESSION_LIST_SELECT).eq("user_id", user_id).eq("document_id", document_id).execute()
+                candidates = res.data or []
+            except Exception as e:
+                print(f"[DBService] Supabase get_session_by_document error: {e}")
+
+        local_matches = [
+            s for s in self.sessions.values()
+            if s.get("user_id") == user_id and s.get("document_id") == document_id
+        ]
+        seen_ids = {c["id"] for c in candidates if c.get("id")}
+        for lm in local_matches:
+            if lm.get("id") not in seen_ids:
+                candidates.append(lm)
+
+        if not candidates:
+            return None
+
+        if len(candidates) == 1:
+            return candidates[0]
+
+        # Multiple duplicate sessions found: score by richness
+        scored_candidates = []
+        for c in candidates:
+            cid = c["id"]
+            notes = await self.get_notes(cid)
+            cards = await self.get_flashcards(cid)
+            quizzes = await self.get_quiz_attempts(cid)
+            has_notes = bool(notes and notes.get("content"))
+            score = (30 if has_notes else 0) + len(cards) * 2 + len(quizzes) * 3
+            scored_candidates.append((score, c.get("last_accessed_at", ""), c, has_notes, len(cards), len(quizzes)))
+
+        scored_candidates.sort(key=lambda x: (x[0], x[1]), reverse=True)
+        winner = scored_candidates[0][2]
+
+        # Clean up empty orphan duplicate sessions (no notes, no cards, no quizzes)
+        for score, _, loser, has_notes, card_count, quiz_count in scored_candidates[1:]:
+            if not has_notes and card_count == 0 and quiz_count == 0:
+                try:
+                    await self.delete_session(loser["id"])
+                except Exception:
+                    pass
+
+        return winner
+
     async def create_session(self, user_id: str, title: str, document_id: Optional[str] = None) -> Dict[str, Any]:
         session_id = str(uuid.uuid4())
         now = datetime.utcnow().isoformat()

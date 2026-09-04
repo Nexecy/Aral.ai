@@ -20,12 +20,22 @@ async def generate_flashcards(
     """
     Generate high-yield flashcards from the reviewed Notes (never raw text).
     """
-    await require_session_owner(session_id, user["id"])
+    session = await require_session_owner(session_id, user["id"])
     notes = await db_service.get_notes(session_id)
+    if not notes or not notes.get("content"):
+        # Auto-generate notes if document is linked to this session
+        if session.get("document_id"):
+            document = await db_service.get_document(session["document_id"])
+            if document:
+                source_text = document.get("extracted_text", "") or "Study guide content."
+                doc_title = document.get("filename", session.get("title", "Study Material"))
+                raw_notes = await gemini_service.generate_notes(source_text, doc_title)
+                notes = await db_service.upsert_notes(session_id, raw_notes, scope="auto-generated")
+
     if not notes or not notes.get("content"):
         raise HTTPException(
             status_code=400,
-            detail="No reviewed notes found for this session. Please generate and review notes first."
+            detail="No study notes found for this session. Please upload a document or generate notes first."
         )
 
     if stream:
