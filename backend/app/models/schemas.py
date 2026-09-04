@@ -41,6 +41,10 @@ class AuthCodeExchange(BaseModel):
     code: str = Field(..., min_length=8, max_length=2048)
 
 
+class AuthGoogleToken(BaseModel):
+    credential: str = Field(..., min_length=10)
+
+
 class AuthPasswordChange(BaseModel):
     current_password: str = Field(..., min_length=8, max_length=128)
     new_password: str = Field(..., min_length=8, max_length=128)

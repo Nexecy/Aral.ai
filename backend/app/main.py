@@ -38,6 +38,7 @@ app.add_middleware(
         "capacitor://localhost",
         "http://localhost",
         "https://aral-ai.vercel.app",
+        "https://aral-ai-three.vercel.app",
     ],
     allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?$|^https://.*\.vercel\.app$",
     allow_credentials=True,
