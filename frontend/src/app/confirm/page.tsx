@@ -1,18 +1,29 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Loader2, Mail, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { AuthScreen } from '@/components/auth/AuthScreen';
 
 export default function ConfirmEmailPage() {
+  const router = useRouter();
   const { user, loading, resendConfirmation } = useAuth();
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const verified = user?.email_verified !== false && Boolean(user);
+
+  useEffect(() => {
+    if (verified && user) {
+      const timer = setTimeout(() => {
+        router.replace('/');
+      }, 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [verified, user, router]);
 
   const handleResend = async () => {
     if (!user?.email) return;
