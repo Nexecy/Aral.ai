@@ -9,13 +9,15 @@ import {
   Check,
   Keyboard,
   Palette,
-  UserRound
+  UserRound,
+  Cookie
 } from 'lucide-react';
 import { useTheme, FONT_SIZES } from '@/context/ThemeContext';
 import { usePomodoro } from '@/context/PomodoroContext';
 import { sound } from '@/lib/sound';
 import { ShortcutsManager } from '@/components/settings/ShortcutsManager';
 import { ProfileSettings } from '@/components/settings/ProfileSettings';
+import { openCookiePreferences } from '@/components/common/CookieConsent';
 
 type SettingsTab = 'profile' | 'appearance' | 'focus' | 'shortcuts';
 
@@ -333,6 +335,31 @@ export default function SettingsPage() {
       )}
 
       {!isMobileOrTablet && tab === 'shortcuts' && <ShortcutsManager />}
+
+      {/* Privacy & Storage Preferences Card */}
+      <div className="p-6 rounded-2xl bg-card border border-border shadow-notion-soft flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold shrink-0">
+            <Cookie className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-sm sm:text-base font-bold text-foreground">
+              Cookie & Privacy Preferences
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Manage essential storage, study analytics, and AI personalization settings
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={openCookiePreferences}
+          className="px-4 py-2.5 rounded-xl border border-border bg-surface-container-low hover:bg-surface-container text-xs font-bold text-foreground transition-colors shrink-0 shadow-2xs"
+        >
+          Manage Cookies
+        </button>
+      </div>
     </div>
   );
 }

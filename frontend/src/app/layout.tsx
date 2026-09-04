@@ -7,6 +7,7 @@ import { NotificationProvider } from '@/context/NotificationContext';
 import { PomodoroProvider } from '@/context/PomodoroContext';
 import { AppShell } from '@/components/layout/AppShell';
 import { ThemePreferencesSync } from '@/components/layout/ThemePreferencesSync';
+import { CookieConsent } from '@/components/common/CookieConsent';
 import { BRAND_LOGO_FALLBACK, BRAND_LOGO_URL } from '@/lib/brand';
 
 const hanken = Hanken_Grotesk({
@@ -74,6 +75,7 @@ export default function RootLayout({
                 <AppShell>
                   {children}
                 </AppShell>
+                <CookieConsent />
               </PomodoroProvider>
             </NotificationProvider>
           </AuthProvider>
