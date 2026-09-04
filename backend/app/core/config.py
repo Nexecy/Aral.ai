@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     
     # Gemini
     GEMINI_API_KEY: str = Field(default="")
-    GEMINI_MODEL: str = Field(default="gemini-3.5-flash")
+    GEMINI_MODEL: str = Field(default="gemini-flash-latest")
     
     # Supabase
     SUPABASE_URL: str = Field(default="")

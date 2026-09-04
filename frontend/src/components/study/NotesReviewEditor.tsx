@@ -14,7 +14,8 @@ import {
   Loader2,
   Layers,
   ArrowRight,
-  HelpCircle
+  HelpCircle,
+  RotateCw
 } from 'lucide-react';
 import { Notes, NoteContent, NoteSection, KeyTerm } from '@/lib/types';
 import { api } from '@/lib/api';
@@ -166,6 +167,18 @@ export function NotesReviewEditor({
               <Check className="w-3.5 h-3.5" />
               <span>{saveMessage}</span>
             </div>
+          )}
+
+          {onRegenerateNotes && !isEditing && (
+            <button
+              onClick={onRegenerateNotes}
+              disabled={generating}
+              className="px-3.5 py-2 rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground font-semibold text-xs flex items-center gap-1.5 hover:bg-muted transition-all shadow-sm disabled:opacity-50"
+              title="Re-extract and generate fresh notes from the document"
+            >
+              <RotateCw className={`w-3.5 h-3.5 ${generating ? 'animate-spin text-primary' : ''}`} />
+              <span>{generating ? 'Generating...' : 'Regenerate Notes'}</span>
+            </button>
           )}
 
           {isEditing ? (

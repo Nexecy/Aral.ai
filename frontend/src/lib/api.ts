@@ -419,9 +419,9 @@ class ApiClient {
   // ---------------------------------------------------------------------------
   // Notes
   // ---------------------------------------------------------------------------
-  async generateNotes(sessionId: string, scope = 'full document'): Promise<Notes> {
+  async generateNotes(sessionId: string, scope = 'full document', force = false): Promise<Notes> {
     this.invalidateCache('/sessions');
-    return this.request<Notes>(`/sessions/${sessionId}/notes/generate?scope=${encodeURIComponent(scope)}`, {
+    return this.request<Notes>(`/sessions/${sessionId}/notes/generate?scope=${encodeURIComponent(scope)}&force=${force}`, {
       method: 'POST'
     });
   }

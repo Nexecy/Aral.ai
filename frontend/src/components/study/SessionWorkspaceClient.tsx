@@ -505,6 +505,18 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
   }, [sessionId]);
 
   // ── Snapshot handlers ─────────────────────────────────────────────────────────
+  const handleRegenerateNotes = async () => {
+    setNotesGenerating(true);
+    try {
+      const regenerated = await api.generateNotes(sessionId, 'full document', true);
+      setSnapshot((prev) => (prev ? { ...prev, notes: regenerated } : prev));
+    } catch (e: any) {
+      alert(`Regeneration failed: ${e.message}`);
+    } finally {
+      setNotesGenerating(false);
+    }
+  };
+
   const handleNotesReviewed = (updatedNotes: Notes) => {
     setSnapshot((prev) => (prev ? { ...prev, notes: updatedNotes } : prev));
     setViewMode('split');
@@ -1215,6 +1227,7 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
           initialNotes={notes || null}
           generating={notesGenerating}
           onConfirmReview={handleNotesReviewed}
+          onRegenerateNotes={handleRegenerateNotes}
         />
       </div>
       )}
