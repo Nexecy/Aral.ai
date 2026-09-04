@@ -45,9 +45,14 @@ export default function TermsPage() {
               time, exam outcomes, or data loss beyond what applicable law requires.
             </p>
           </div>
-          <Link href="/" className="inline-block text-sm font-bold text-primary hover:underline">
-            Back to Aral.ai
-          </Link>
+          <div className="pt-2 border-t border-border flex flex-wrap items-center justify-between gap-4">
+            <Link href="/" className="text-sm font-bold text-primary hover:underline">
+              &larr; Back to Aral.ai
+            </Link>
+            <Link href="/privacy" className="text-sm font-medium text-muted-foreground hover:text-foreground">
+              Privacy Policy &amp; Data Deletion &rarr;
+            </Link>
+          </div>
         </div>
       </div>
     </div>
