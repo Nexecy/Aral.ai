@@ -73,6 +73,9 @@ class DocumentResponse(DocumentBase):
     extracted_text: Optional[str] = ""
     model_config = ConfigDict(from_attributes=True)
 
+class DocumentUpdate(BaseModel):
+    filename: Optional[str] = Field(default=None, min_length=1, max_length=255)
+
 
 # ==============================================================================
 # Session Schemas

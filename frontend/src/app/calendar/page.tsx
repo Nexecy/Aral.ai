@@ -307,6 +307,7 @@ export default function CalendarPage() {
         onClose={() => setDialogOpen(false)}
         onSubmit={handleSubmit}
         onDelete={handleDelete}
+        onDocumentsChanged={load}
       />
     </div>
   );

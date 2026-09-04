@@ -74,6 +74,24 @@ class StorageService:
                 return await f.read()
         return None
 
+    async def delete_file(self, storage_path: str) -> bool:
+        """
+        Delete file from Supabase Storage or local fallback.
+        """
+        if self.supabase_client:
+            try:
+                self.supabase_client.storage.from_("documents").remove([storage_path])
+            except Exception as e:
+                print(f"[StorageService] Supabase delete file error: {e}")
+
+        local_path = os.path.join(self.local_storage_dir, storage_path.replace("/", os.sep))
+        if os.path.exists(local_path):
+            try:
+                os.remove(local_path)
+            except Exception as e:
+                print(f"[StorageService] Local delete file error: {e}")
+        return True
+
     def _avatar_public_url(self, storage_path: str) -> str:
         public = self.supabase_client.storage.from_("avatars").get_public_url(storage_path)
         url = None

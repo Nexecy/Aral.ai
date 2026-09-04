@@ -11,8 +11,9 @@ import {
   Sparkles
 } from 'lucide-react';
 import { DocumentUploader } from '@/components/study/DocumentUploader';
+import { DocumentLibrary } from '@/components/documents/DocumentLibrary';
 import { BrandLogo } from '@/components/brand/BrandLogo';
-import { DashboardSummary, Exam, Session } from '@/lib/types';
+import { DashboardSummary, Document, Exam, Session } from '@/lib/types';
 import { api } from '@/lib/api';
 import { examColor, formatCountdown, formatExamDate } from '@/lib/examColors';
 
@@ -29,19 +30,22 @@ export default function DashboardPage() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
+  const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [summaryData, sessionData, examData] = await Promise.all([
+      const [summaryData, sessionData, examData, docData] = await Promise.all([
         api.getDashboardSummary(),
         api.getSessions(),
-        api.getExams()
+        api.getExams(),
+        api.getDocuments()
       ]);
       setSummary(summaryData);
       setSessions(sessionData);
       setExams(examData);
+      setDocuments(docData);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load your dashboard.');
@@ -260,6 +264,34 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+      </section>
+
+      {/* Uploaded Documents Library Section */}
+      <section className="space-y-4 pt-2">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-bold tracking-tight text-foreground">
+              Your Reference Documents
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Check, preview, rename, and manage all your uploaded study materials
+            </p>
+          </div>
+          <span className="text-xs font-semibold px-3 py-1 rounded-full bg-primary/10 text-primary border border-primary/20">
+            {documents.length} {documents.length === 1 ? 'file' : 'files'}
+          </span>
+        </div>
+
+        <DocumentLibrary
+          documents={documents}
+          sessions={sessions}
+          onDocumentUpdated={(updated) => {
+            setDocuments((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
+          }}
+          onDocumentDeleted={(deletedId) => {
+            setDocuments((prev) => prev.filter((d) => d.id !== deletedId));
+          }}
+        />
       </section>
 
       {sessions.slice(1).length > 0 && (

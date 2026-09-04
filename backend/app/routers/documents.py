@@ -142,3 +142,38 @@ async def get_document_file(
             "Cache-Control": "public, max-age=3600"
         }
     )
+
+from app.models.schemas import DocumentResponse, DocumentUpdate
+
+@router.patch("/{document_id}", response_model=DocumentResponse)
+async def update_document(
+    document_id: str,
+    payload: DocumentUpdate,
+    user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Update document metadata (e.g. rename filename).
+    """
+    await _owned_document(document_id, user["id"])
+    updates = payload.model_dump(exclude_unset=True)
+    updated = await db_service.update_document(document_id, updates)
+    if not updated:
+        raise HTTPException(status_code=500, detail="Failed to update document")
+    return updated
+
+@router.delete("/{document_id}")
+async def delete_document(
+    document_id: str,
+    user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Delete document from storage and database, unlinking from sessions & exams.
+    """
+    doc = await _owned_document(document_id, user["id"])
+    storage_path = doc.get("storage_path")
+    if storage_path:
+        await storage_service.delete_file(storage_path)
+
+    success = await db_service.delete_document(document_id)
+    return {"ok": success, "message": "Document deleted successfully"}
+

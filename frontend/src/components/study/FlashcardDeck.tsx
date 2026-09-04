@@ -20,6 +20,7 @@ import { sound } from '@/lib/sound';
 import { api } from '@/lib/api';
 import { FlashcardNavigator } from '@/components/study/FlashcardNavigator';
 import { useEmailGate } from '@/context/AuthContext';
+import { Portal } from '@/components/ui/Portal';
 
 /** A card composer request routed in from the viewer's selection menu. */
 export interface FlashcardPrefill {
@@ -436,52 +437,54 @@ export function FlashcardDeck({
 
       {/* Manual Add Card Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-card border border-border rounded-2xl p-6 shadow-notion-elevated space-y-4">
-            <h3 className="text-lg font-bold text-foreground">Add Custom Flashcard</h3>
-            <form onSubmit={handleAddManualCard} className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-muted-foreground">Front (Prompt / Question)</label>
-                <input
-                  type="text"
-                  required
-                  value={newFront}
-                  onChange={(e) => setNewFront(e.target.value)}
-                  placeholder="e.g. What is Long-Term Potentiation?"
-                  className="w-full text-sm bg-muted/40 p-2.5 rounded-lg border border-border focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
+        <Portal>
+          <div className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-screen h-screen bg-black/60 backdrop-blur-md z-[9999] flex items-center justify-center p-4 animate-in fade-in">
+            <div className="w-full max-w-md bg-card border border-border rounded-2xl p-6 shadow-notion-elevated space-y-4">
+              <h3 className="text-lg font-bold text-foreground">Add Custom Flashcard</h3>
+              <form onSubmit={handleAddManualCard} className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-muted-foreground">Front (Prompt / Question)</label>
+                  <input
+                    type="text"
+                    required
+                    value={newFront}
+                    onChange={(e) => setNewFront(e.target.value)}
+                    placeholder="e.g. What is Long-Term Potentiation?"
+                    className="w-full text-sm bg-muted/40 p-2.5 rounded-lg border border-border focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-muted-foreground">Back (Answer / Explanation)</label>
-                <textarea
-                  required
-                  rows={3}
-                  value={newBack}
-                  onChange={(e) => setNewBack(e.target.value)}
-                  placeholder="e.g. The persistent strengthening of synapses following high-frequency activation..."
-                  className="w-full text-sm bg-muted/40 p-2.5 rounded-lg border border-border focus:outline-none focus:ring-2 focus:ring-primary resize-none"
-                />
-              </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-muted-foreground">Back (Answer / Explanation)</label>
+                  <textarea
+                    required
+                    rows={3}
+                    value={newBack}
+                    onChange={(e) => setNewBack(e.target.value)}
+                    placeholder="e.g. The persistent strengthening of synapses following high-frequency activation..."
+                    className="w-full text-sm bg-muted/40 p-2.5 rounded-lg border border-border focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+                  />
+                </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 rounded-lg border border-border text-xs font-semibold text-muted-foreground hover:bg-muted"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-bold hover:bg-primary-active"
-                >
-                  Save Flashcard
-                </button>
-              </div>
-            </form>
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddModal(false)}
+                    className="px-4 py-2 rounded-lg border border-border text-xs font-semibold text-muted-foreground hover:bg-muted"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-bold hover:bg-primary-active"
+                  >
+                    Save Flashcard
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
+        </Portal>
       )}
     </div>
   );

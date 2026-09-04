@@ -54,7 +54,7 @@ export default function EmptyWorkspacePage() {
 
       <div className="flex flex-col xl:flex-row gap-4 items-start">
         <div className="w-full xl:w-[62%]">
-          <DocumentViewer document={null} sessionTitle="New Study Session" height={760} />
+          <DocumentViewer document={null} sessionTitle="New Study Session" height={580} />
         </div>
 
         <div className="w-full xl:flex-1 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-4">

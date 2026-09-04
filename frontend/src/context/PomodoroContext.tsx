@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
 import { sound } from '@/lib/sound';
 import { api } from '@/lib/api';
 import { PomodoroSettings } from '@/lib/types';
@@ -151,7 +151,7 @@ export function PomodoroProvider({ children }: { children: React.ReactNode }) {
     };
   }, [isRunning, mode, currentSessionId, settings, cyclesCompleted]);
 
-  const handleCycleComplete = async () => {
+  const handleCycleComplete = useCallback(async () => {
     if (settings.sound_enabled) {
       sound.playPomodoroChime(settings.sound_choice);
     }
@@ -199,28 +199,27 @@ export function PomodoroProvider({ children }: { children: React.ReactNode }) {
       setTimeLeft(nextSeconds);
       setIsRunning(settings.auto_start_next);
     }
-  };
+  }, [settings, cyclesCompleted, mode, addNotification, currentSessionId]);
 
-  const startTimer = () => setIsRunning(true);
-  const pauseTimer = () => setIsRunning(false);
-  const toggleTimer = () => setIsRunning((prev) => !prev);
+  const startTimer = useCallback(() => setIsRunning(true), []);
+  const pauseTimer = useCallback(() => setIsRunning(false), []);
+  const toggleTimer = useCallback(() => setIsRunning((prev) => !prev), []);
 
-  
-  const resetTimer = () => {
+  const resetTimer = useCallback(() => {
     setIsRunning(false);
     setTimeLeft(getSecondsForMode(mode, settings));
-  };
+  }, [mode, settings]);
 
-  const toggleWidget = () => setIsWidgetOpen((prev) => !prev);
-  const toggleMinimize = () => setIsMinimized((prev) => !prev);
+  const toggleWidget = useCallback(() => setIsWidgetOpen((prev) => !prev), []);
+  const toggleMinimize = useCallback(() => setIsMinimized((prev) => !prev), []);
 
-  const setTimerMode = (newMode: TimerMode) => {
+  const setTimerMode = useCallback((newMode: TimerMode) => {
     setMode(newMode);
     setIsRunning(false);
     setTimeLeft(getSecondsForMode(newMode, settings));
-  };
+  }, [settings]);
 
-  const linkSession = (sessionId: string | null, title?: string | null) => {
+  const linkSession = useCallback((sessionId: string | null, title?: string | null) => {
     if (sessionId) {
       setCurrentSessionId((prev) => {
         if (prev !== sessionId) setSessionFocusSeconds(0);
@@ -241,28 +240,33 @@ export function PomodoroProvider({ children }: { children: React.ReactNode }) {
         localStorage.removeItem('aral_session_focus_seconds');
       }
     }
-  };
+  }, []);
 
-  const resetSessionFocus = () => {
+  const resetSessionFocus = useCallback(() => {
     setSessionFocusSeconds(0);
     if (typeof window !== 'undefined') {
       localStorage.removeItem('aral_session_focus_seconds');
     }
-  };
+  }, []);
 
-  const updateSettings = async (newSettings: Partial<PomodoroSettings>) => {
-    const merged = { ...settings, ...newSettings };
-    setSettings(merged);
-    localStorage.setItem('aral_pomodoro_settings', JSON.stringify(merged));
+  const updateSettings = useCallback(async (newSettings: Partial<PomodoroSettings>) => {
+    setSettings((prev) => {
+      const merged = { ...prev, ...newSettings };
+      localStorage.setItem('aral_pomodoro_settings', JSON.stringify(merged));
+      return merged;
+    });
     if (!isRunning) {
-      setTimeLeft(getSecondsForMode(mode, merged));
+      setSettings((current) => {
+        setTimeLeft(getSecondsForMode(mode, current));
+        return current;
+      });
     }
     try {
       await api.updatePomodoroSettings(newSettings);
     } catch (e) {
       console.error('Failed to update remote settings:', e);
     }
-  };
+  }, [isRunning, mode]);
 
   const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;

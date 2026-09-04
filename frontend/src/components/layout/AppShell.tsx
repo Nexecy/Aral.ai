@@ -8,7 +8,6 @@ import { BrandLogo } from '@/components/brand/BrandLogo';
 import { LeftNavbar } from './LeftNavbar';
 import { PomodoroWidget } from './PomodoroWidget';
 import { GlobalKnowledgeSearch } from './GlobalKnowledgeSearch';
-import { SessionRecoveryPrompt } from './SessionRecoveryPrompt';
 import { VerifyEmailBanner } from '@/components/auth/VerifyEmailBanner';
 import { usePomodoro } from '@/context/PomodoroContext';
 import { useAuth } from '@/context/AuthContext';
@@ -135,7 +134,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </main>
 
       <PomodoroWidget />
-      <SessionRecoveryPrompt />
     </div>
   );
 }

@@ -3,47 +3,64 @@
 import React, { useEffect, useState } from 'react';
 import {
   Settings as SettingsIcon,
-  Key,
   Sun,
   Moon,
   Volume2,
-  Smartphone,
-  Monitor,
   Check,
-  Database,
   Keyboard,
   Palette,
   UserRound
 } from 'lucide-react';
 import { useTheme, FONT_SIZES } from '@/context/ThemeContext';
-import { useAuth } from '@/context/AuthContext';
 import { usePomodoro } from '@/context/PomodoroContext';
 import { sound } from '@/lib/sound';
 import { ShortcutsManager } from '@/components/settings/ShortcutsManager';
 import { ProfileSettings } from '@/components/settings/ProfileSettings';
 
-type SettingsTab = 'profile' | 'appearance' | 'engine' | 'focus' | 'shortcuts' | 'platforms';
+type SettingsTab = 'profile' | 'appearance' | 'focus' | 'shortcuts';
 
-const TABS: { id: SettingsTab; label: string; icon: React.ElementType }[] = [
+interface TabItem {
+  id: SettingsTab;
+  label: string;
+  icon: React.ElementType;
+  desktopOnly?: boolean;
+}
+
+const TABS: TabItem[] = [
   { id: 'profile', label: 'Profile', icon: UserRound },
   { id: 'appearance', label: 'Appearance', icon: Palette },
-  { id: 'engine', label: 'AI & Backend', icon: Key },
   { id: 'focus', label: 'Focus', icon: Volume2 },
-  { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard },
-  { id: 'platforms', label: 'Platforms', icon: Monitor }
+  { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard, desktopOnly: true }
 ];
 
 export default function SettingsPage() {
   const { theme, setTheme, fontSize, setFontSize } = useTheme();
-  const { systemStatus } = useAuth();
   const pomodoro = usePomodoro();
   const [tab, setTab] = useState<SettingsTab>('appearance');
+  const [isMobileOrTablet, setIsMobileOrTablet] = useState<boolean>(false);
 
+  // Detect mobile / tablet / coarse pointer
+  useEffect(() => {
+    const checkDevice = () => {
+      const isTouch = window.matchMedia('(pointer: coarse)').matches;
+      const isSmall = window.innerWidth < 1024;
+      setIsMobileOrTablet(isTouch || isSmall);
+    };
+    checkDevice();
+    window.addEventListener('resize', checkDevice);
+    return () => window.removeEventListener('resize', checkDevice);
+  }, []);
+
+  // Handle URL hash changes
   useEffect(() => {
     const applyHash = () => {
       const hash = window.location.hash.replace('#', '');
       if (TABS.some((item) => item.id === hash)) {
-        setTab(hash as SettingsTab);
+        if (hash === 'shortcuts' && (window.innerWidth < 1024 || window.matchMedia('(pointer: coarse)').matches)) {
+          setTab('appearance');
+        } else {
+          setTab(hash as SettingsTab);
+        }
       }
     };
     applyHash();
@@ -51,10 +68,19 @@ export default function SettingsPage() {
     return () => window.removeEventListener('hashchange', applyHash);
   }, []);
 
+  // Switch away from shortcuts if on mobile/tablet
+  useEffect(() => {
+    if (isMobileOrTablet && tab === 'shortcuts') {
+      setTab('appearance');
+    }
+  }, [isMobileOrTablet, tab]);
+
   const selectTab = (next: SettingsTab) => {
     setTab(next);
     window.history.replaceState(null, '', `#${next}`);
   };
+
+  const visibleTabs = TABS.filter((t) => !t.desktopOnly || !isMobileOrTablet);
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -69,17 +95,19 @@ export default function SettingsPage() {
               Settings & Preferences
             </h1>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Theme, profile, tutor engine, focus defaults, and keyboard shortcuts
+              Theme, profile, reading font size, focus defaults{!isMobileOrTablet && ', and keyboard shortcuts'}
             </p>
           </div>
         </div>
 
         <div className="mt-5 flex items-center gap-1 overflow-x-auto no-scrollbar p-1 rounded-xl bg-surface-container-low border border-border">
-          {TABS.map(({ id, label, icon: Icon }) => (
+          {visibleTabs.map(({ id, label, icon: Icon, desktopOnly }) => (
             <button
               key={id}
               onClick={() => selectTab(id)}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
+                desktopOnly ? 'hidden lg:flex' : ''
+              } ${
                 tab === id
                   ? 'bg-card text-primary shadow-sm'
                   : 'text-muted-foreground hover:text-foreground'
@@ -201,50 +229,6 @@ export default function SettingsPage() {
       </div>
       )}
 
-      {tab === 'engine' && (
-      <div className="p-6 rounded-2xl bg-card border border-border shadow-notion-soft space-y-4">
-        <h2 className="text-base font-bold text-foreground flex items-center gap-2">
-          <Key className="w-4 h-4 text-primary" />
-          <span>AI Engine & Integration Mode</span>
-        </h2>
-
-        <div className="space-y-3">
-          <div className="p-4 rounded-xl bg-surface-container-low border border-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div>
-              <div className="font-bold text-xs text-foreground flex items-center gap-2">
-                <span>Google GenAI SDK (Gemini 1.5)</span>
-                <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
-                  systemStatus?.has_gemini ? 'bg-sticker-green/15 text-sticker-green' : 'bg-sticker-sky/15 text-sticker-sky'
-                }`}>
-                  {systemStatus?.has_gemini ? 'Live API Connected' : 'Hybrid Auto-Generator'}
-                </span>
-              </div>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Model: <strong>{systemStatus?.gemini_model || 'gemini-1.5-flash'}</strong> with Native JSON schemas
-              </p>
-            </div>
-          </div>
-
-          <div className="p-4 rounded-xl bg-surface-container-low border border-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div>
-              <div className="font-bold text-xs text-foreground flex items-center gap-2">
-                <Database className="w-4 h-4 text-primary" />
-                <span>Supabase PostgreSQL & Auth</span>
-                <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
-                  systemStatus?.has_supabase ? 'bg-sticker-green/15 text-sticker-green' : 'bg-sticker-sky/15 text-sticker-sky'
-                }`}>
-                  {systemStatus?.has_supabase ? 'Live Supabase Connected' : 'Hybrid Local Store'}
-                </span>
-              </div>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Tables: Documents, Sessions, Notes, Flashcards, QuizAttempts, ChatMessages, PomodoroLogs, Exams
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-      )}
-
       {tab === 'focus' && (
       <div className="p-6 rounded-2xl bg-card border border-border shadow-notion-soft space-y-4">
         <div className="flex items-center justify-between">
@@ -348,38 +332,7 @@ export default function SettingsPage() {
       </div>
       )}
 
-      {tab === 'shortcuts' && <ShortcutsManager />}
-
-      {tab === 'platforms' && (
-      <div className="p-6 rounded-2xl bg-card border border-border shadow-notion-soft space-y-4">
-        <h2 className="text-base font-bold text-foreground flex items-center gap-2">
-          <Monitor className="w-4 h-4 text-primary" />
-          <span>Cross-Platform Deployment Specs</span>
-        </h2>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-          <div className="p-4 rounded-xl bg-surface-container-low border border-border space-y-1.5">
-            <div className="font-bold text-foreground flex items-center gap-1.5">
-              <Smartphone className="w-4 h-4 text-primary" />
-              <span>Capacitor (iOS & Android)</span>
-            </div>
-            <p className="text-muted-foreground leading-relaxed">
-              Static export in <code className="text-primary font-mono text-[11px]">out/</code> with native local notifications plugin for background Pomodoro alerts.
-            </p>
-          </div>
-
-          <div className="p-4 rounded-xl bg-surface-container-low border border-border space-y-1.5">
-            <div className="font-bold text-foreground flex items-center gap-1.5">
-              <Monitor className="w-4 h-4 text-primary" />
-              <span>Tauri (Windows / macOS / Linux)</span>
-            </div>
-            <p className="text-muted-foreground leading-relaxed">
-              Lightweight desktop bundle configured with native system tray and custom desktop window chrome.
-            </p>
-          </div>
-        </div>
-      </div>
-      )}
+      {!isMobileOrTablet && tab === 'shortcuts' && <ShortcutsManager />}
     </div>
   );
 }

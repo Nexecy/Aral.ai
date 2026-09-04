@@ -4,6 +4,8 @@ import React, { useEffect, useState } from 'react';
 import { CalendarPlus, Loader2, Trash2, X } from 'lucide-react';
 import { Document, Exam, ExamColor, ExamInput } from '@/lib/types';
 import { EXAM_COLORS, EXAM_COLOR_ORDER, toDateKey } from '@/lib/examColors';
+import { DocumentManagerModal } from '@/components/documents/DocumentManagerModal';
+import { Portal } from '@/components/ui/Portal';
 
 interface ExamFormDialogProps {
   open: boolean;
@@ -15,6 +17,7 @@ interface ExamFormDialogProps {
   onClose: () => void;
   onSubmit: (payload: ExamInput) => Promise<void>;
   onDelete?: (exam: Exam) => Promise<void>;
+  onDocumentsChanged?: () => void;
 }
 
 export function ExamFormDialog({
@@ -24,7 +27,8 @@ export function ExamFormDialog({
   documents,
   onClose,
   onSubmit,
-  onDelete
+  onDelete,
+  onDocumentsChanged
 }: ExamFormDialogProps) {
   const [title, setTitle] = useState('');
   const [examDate, setExamDate] = useState('');
@@ -34,6 +38,7 @@ export function ExamFormDialog({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showDocManager, setShowDocManager] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -105,10 +110,11 @@ export function ExamFormDialog({
   const busy = saving || deleting;
 
   return (
-    <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in"
-      onClick={onClose}
-    >
+    <Portal>
+      <div
+        className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-screen h-screen z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-md p-4 animate-in fade-in"
+        onClick={onClose}
+      >
       <div
         role="dialog"
         aria-modal="true"
@@ -164,9 +170,18 @@ export function ExamFormDialog({
             </div>
 
             <div className="space-y-1.5">
-              <label htmlFor="exam-document" className="text-xs font-bold text-foreground">
-                Linked subject <span className="font-normal text-muted-foreground">(optional)</span>
-              </label>
+              <div className="flex items-center justify-between">
+                <label htmlFor="exam-document" className="text-xs font-bold text-foreground">
+                  Linked subject <span className="font-normal text-muted-foreground">(optional)</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowDocManager(true)}
+                  className="text-[11px] font-bold text-primary hover:underline cursor-pointer"
+                >
+                  Manage files
+                </button>
+              </div>
               <select
                 id="exam-document"
                 value={documentId}
@@ -258,6 +273,15 @@ export function ExamFormDialog({
           </div>
         </form>
       </div>
-    </div>
+      </div>
+
+      <DocumentManagerModal
+        open={showDocManager}
+        onClose={() => setShowDocManager(false)}
+        onDocumentsChanged={() => {
+          onDocumentsChanged?.();
+        }}
+      />
+    </Portal>
   );
 }

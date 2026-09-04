@@ -21,6 +21,7 @@ import {
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import { usePomodoro } from '@/context/PomodoroContext';
+import { api } from '@/lib/api';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { UserAvatar } from '@/components/brand/UserAvatar';
 import { TopNavMenus } from './TopNavMenus';
@@ -84,6 +85,7 @@ export function LeftNavbar() {
 
   const [collapsed, setCollapsed] = useState<boolean>(false);
   const [mobileOpen, setMobileOpen] = useState<boolean>(false);
+  const [hasUnfinishedHistory, setHasUnfinishedHistory] = useState<boolean>(false);
 
   useEffect(() => {
     try {
@@ -134,6 +136,58 @@ export function LeftNavbar() {
     setMobileOpen(false);
   }, [pathname]);
 
+  // Check for unfinished sessions with progress & handle history navigation badge clear
+  useEffect(() => {
+    if (pathname.startsWith('/history')) {
+      try {
+        window.localStorage.setItem('aral_history_badge_dismissed_at', Date.now().toString());
+      } catch {
+        /* ignore */
+      }
+      setHasUnfinishedHistory(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function checkUnfinished() {
+      if (!user?.id) {
+        setHasUnfinishedHistory(false);
+        return;
+      }
+      try {
+        const dismissedStr = window.localStorage.getItem('aral_history_badge_dismissed_at');
+        const dismissedAt = dismissedStr ? parseInt(dismissedStr, 10) : 0;
+
+        const sessions = await api.getSessions();
+        if (cancelled) return;
+
+        const hasUnfinished = sessions.some((s) => {
+          const isNotCompleted = s.status !== 'completed' && !s.ended_at;
+          const hasProgress = (s.total_focus_seconds && s.total_focus_seconds > 0) || (s.cards_reviewed && s.cards_reviewed > 0);
+          const lastAccessed = s.last_accessed_at ? new Date(s.last_accessed_at).getTime() : 0;
+          return isNotCompleted && hasProgress && lastAccessed > dismissedAt;
+        });
+
+        if (!cancelled) setHasUnfinishedHistory(hasUnfinished);
+      } catch {
+        /* ignore */
+      }
+    }
+
+    void checkUnfinished();
+
+    const onSessionEnded = () => {
+      void checkUnfinished();
+    };
+
+    window.addEventListener('aral:session-ended', onSessionEnded);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('aral:session-ended', onSessionEnded);
+    };
+  }, [pathname, user?.id]);
+
   const navItems = [
     {
       id: 'library',
@@ -166,7 +220,8 @@ export function LeftNavbar() {
       label: 'Session History',
       shortLabel: 'History',
       href: '/history/',
-      icon: History
+      icon: History,
+      dotBadge: hasUnfinishedHistory
     },
     {
       id: 'settings',
@@ -257,15 +312,22 @@ export function LeftNavbar() {
                   }`}
                   title={!showLabels ? item.label : undefined}
                 >
-                  <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'}`} />
+                  <div className="relative shrink-0 flex items-center justify-center">
+                    <Icon className={`w-5 h-5 ${isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'}`} />
+                    {!showLabels && item.dotBadge && (
+                      <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-primary ring-2 ring-card" />
+                    )}
+                  </div>
                   {showLabels && (
-                    <div className="flex items-center justify-between w-full">
+                    <div className="flex items-center justify-between w-full min-w-0">
                       <span className="truncate">{item.label}</span>
-                      {item.badge && (
+                      {item.dotBadge ? (
+                        <span className="w-2 h-2 rounded-full bg-primary shrink-0 ml-2 animate-pulse" />
+                      ) : item.badge ? (
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${item.badgeColor}`}>
                           {item.badge}
                         </span>
-                      )}
+                      ) : null}
                     </div>
                   )}
                   {isActive && showLabels && (
@@ -378,7 +440,12 @@ export function LeftNavbar() {
                   isActive ? 'text-primary font-semibold' : 'text-muted-foreground'
                 }`}
               >
-                <Icon className="w-5 h-5" />
+                <div className="relative flex items-center justify-center">
+                  <Icon className="w-5 h-5" />
+                  {item.dotBadge && (
+                    <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-primary ring-2 ring-card animate-pulse" />
+                  )}
+                </div>
                 <span className="text-[10px] leading-tight truncate max-w-full">{item.shortLabel}</span>
               </Link>
             );

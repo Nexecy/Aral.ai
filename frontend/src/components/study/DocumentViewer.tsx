@@ -33,6 +33,8 @@ import { useTextSelection } from '@/hooks/useTextSelection';
 import { SelectionActionMenu } from '@/components/study/SelectionActionMenu';
 import { ImageViewer } from '@/components/study/viewers/ImageViewer';
 import { TextReader } from '@/components/study/viewers/TextReader';
+import { PdfViewer } from '@/components/study/viewers/PdfViewer';
+import { PageNavigatorPopover } from '@/components/study/PageNavigatorPopover';
 import { UploadProgressBar, UploadFileMeta } from '@/components/study/UploadProgressBar';
 
 export const ACCEPTED_EXTENSIONS = [
@@ -77,7 +79,7 @@ const KIND_ICON: Record<PreviewKind, typeof FileText> = {
 function DocumentViewerImpl({
   document,
   sessionTitle,
-  height = 760,
+  height = 580,
   onAskTutor,
   onCreateFlashcard,
   onExplainConcept,
@@ -97,9 +99,12 @@ function DocumentViewerImpl({
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [showSearch, setShowSearch] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [showPageNavigator, setShowPageNavigator] = useState<boolean>(false);
+
+  const [pdfTotalPages, setPdfTotalPages] = useState<number>(document?.page_count || 1);
 
   const readerRef = useRef<HTMLDivElement | null>(null);
-  const { selection, clearSelection } = useTextSelection(readerRef, viewFormat === 'text');
+  const { selection, clearSelection } = useTextSelection(readerRef, true);
 
   // The file route is user-scoped, so the bytes are fetched with the auth header
   // and rendered from an object URL rather than pointing `src` at the API.
@@ -195,8 +200,10 @@ function DocumentViewerImpl({
     return chunks.length > 0 ? chunks : [raw];
   }, [extractedText, isMarkdown]);
 
-  const totalPages = pages.length;
-  const activePage = pages[Math.min(currentPage, totalPages) - 1] || '';
+  const totalPages = viewFormat === 'original' && kind === 'pdf'
+    ? (pdfTotalPages || document?.page_count || 1)
+    : pages.length;
+  const activePage = pages[Math.min(currentPage, pages.length || 1) - 1] || '';
 
   // ── Upload flow (shown when the session has no document yet) ────────────────
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -372,7 +379,7 @@ function DocumentViewerImpl({
 
   const displayFilename = document.filename || sessionTitle;
   const KindIcon = KIND_ICON[kind];
-  const showTextControls = viewFormat === 'text';
+  const showControls = viewFormat === 'text' || (viewFormat === 'original' && kind === 'pdf');
 
   const handleSelectionAction = (run?: (text: string) => void) => (text: string) => {
     run?.(text);
@@ -387,7 +394,7 @@ function DocumentViewerImpl({
       style={isFullscreen ? undefined : { height: `${height}px` }}
     >
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center justify-between p-4 sm:p-5 border-b border-outline-variant bg-surface-container-lowest z-10 gap-3">
+      <div className="flex flex-wrap items-center justify-between px-4 py-3 sm:px-5 sm:py-3.5 border-b border-outline-variant bg-surface-container-lowest z-10 gap-2.5">
         <div className="flex items-center gap-3.5">
           <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 shadow-sm">
             <KindIcon className="w-5 h-5" />
@@ -433,10 +440,10 @@ function DocumentViewerImpl({
         )}
 
         <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
-          {showTextControls && (
+          {showControls && (
             <>
               {totalPages > 1 && (
-                <div className="flex items-center gap-1 bg-surface-container rounded-full px-3 py-1.5 border border-outline-variant/60">
+                <div className="flex items-center gap-1 bg-surface-container rounded-full px-2.5 py-1.5 border border-outline-variant/60">
                   <button
                     onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                     disabled={currentPage <= 1}
@@ -445,9 +452,13 @@ function DocumentViewerImpl({
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </button>
-                  <span className="font-mono text-xs font-bold text-on-surface px-2">
-                    {currentPage} / {totalPages}
-                  </span>
+                  <button
+                    onClick={() => setShowPageNavigator(true)}
+                    className="font-mono text-xs font-bold text-on-surface hover:text-primary hover:bg-surface-container-highest px-2 py-0.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer group"
+                    title="Click to preview all pages & jump"
+                  >
+                    <span>{currentPage} / {totalPages}</span>
+                  </button>
                   <button
                     onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                     disabled={currentPage >= totalPages}
@@ -568,16 +579,18 @@ function DocumentViewerImpl({
       )}
 
       {viewFormat === 'original' && kind === 'pdf' && fileUrl && (
-        <div className="flex-1 w-full bg-surface-container-low flex flex-col relative overflow-hidden">
-          <iframe
-            src={`${fileUrl}#page=1&zoom=100`}
-            className="w-full h-full border-none"
-            title={displayFilename}
-          />
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-3.5 py-1.5 rounded-full bg-charcoal/80 backdrop-blur-md text-white/80 text-[10px] font-semibold pointer-events-none">
-            Switch to Text Layer to highlight text and ask the AI tutor
-          </div>
-        </div>
+        <PdfViewer
+          fileUrl={fileUrl}
+          title={displayFilename}
+          currentPage={currentPage}
+          onTotalPagesLoaded={(count) => {
+            if (count > 0) setPdfTotalPages(count);
+          }}
+          onPageChange={(page) => setCurrentPage(page)}
+          zoomLevel={zoomLevel}
+          searchTerm={searchTerm}
+          selectionContainerRef={readerRef}
+        />
       )}
 
       {viewFormat === 'original' && kind === 'image' && fileUrl && (
@@ -607,6 +620,18 @@ function DocumentViewerImpl({
         onCreateFlashcard={handleSelectionAction(onCreateFlashcard)}
         onExplainConcept={handleSelectionAction(onExplainConcept)}
         onDismiss={clearSelection}
+      />
+
+      <PageNavigatorPopover
+        isOpen={showPageNavigator}
+        onClose={() => setShowPageNavigator(false)}
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onSelectPage={(page) => setCurrentPage(page)}
+        fileUrl={fileUrl}
+        isPdf={viewFormat === 'original' && kind === 'pdf'}
+        extractedPages={pages}
+        sessionTitle={sessionTitle}
       />
     </div>
   );

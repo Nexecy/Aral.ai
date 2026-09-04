@@ -327,6 +327,29 @@ class ApiClient {
     return res.blob();
   }
 
+  async updateDocument(documentId: string, updates: { filename?: string }): Promise<Document> {
+    this.invalidateCache('/documents');
+    this.invalidateCache(`/documents/${documentId}`);
+    this.invalidateCache('/sessions');
+    this.invalidateCache('/dashboard');
+    this.invalidateCache('/exams');
+    return this.request<Document>(`/documents/${documentId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates)
+    });
+  }
+
+  async deleteDocument(documentId: string): Promise<{ ok: boolean; message: string }> {
+    this.invalidateCache('/documents');
+    this.invalidateCache(`/documents/${documentId}`);
+    this.invalidateCache('/sessions');
+    this.invalidateCache('/dashboard');
+    this.invalidateCache('/exams');
+    return this.request<{ ok: boolean; message: string }>(`/documents/${documentId}`, {
+      method: 'DELETE'
+    });
+  }
+
   // ---------------------------------------------------------------------------
   // Sessions
   // ---------------------------------------------------------------------------

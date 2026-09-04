@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { Session } from '@/lib/types';
 import { api } from '@/lib/api';
+import { Portal } from '@/components/ui/Portal';
 
 export default function HistoryPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -153,39 +154,41 @@ export default function HistoryPage() {
 
       {/* Delete Confirmation Modal */}
       {sessionToDelete && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-card border border-border rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-5">
-            <div className="w-12 h-12 rounded-2xl bg-destructive/15 text-destructive flex items-center justify-center">
-              <AlertTriangle className="w-6 h-6" />
-            </div>
+        <Portal>
+          <div className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-screen h-screen z-[9999] bg-black/60 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
+            <div className="bg-card border border-border rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-5">
+              <div className="w-12 h-12 rounded-2xl bg-destructive/15 text-destructive flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
 
-            <div>
-              <h3 className="text-lg font-bold text-foreground">Delete Study Session?</h3>
-              <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
-                Are you sure you want to delete <strong className="text-foreground">"{sessionToDelete.title}"</strong>?
-                This will permanently remove its extracted notes, flashcards, quiz attempts, and chat history. The original PDF document will be kept safe.
-              </p>
-            </div>
+              <div>
+                <h3 className="text-lg font-bold text-foreground">Delete Study Session?</h3>
+                <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+                  Are you sure you want to delete <strong className="text-foreground">"{sessionToDelete.title}"</strong>?
+                  This will permanently remove its extracted notes, flashcards, quiz attempts, and chat history. The original PDF document will be kept safe.
+                </p>
+              </div>
 
-            <div className="flex items-center gap-3 pt-2">
-              <button
-                onClick={() => setSessionToDelete(null)}
-                disabled={deleting}
-                className="flex-1 py-2.5 rounded-xl border border-border text-xs font-bold text-foreground hover:bg-surface-container transition-colors disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDeleteSession}
-                disabled={deleting}
-                className="flex-1 py-2.5 rounded-xl bg-destructive hover:bg-destructive/90 text-destructive-foreground text-xs font-bold transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                <span>{deleting ? 'Deleting...' : 'Delete Session'}</span>
-              </button>
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  onClick={() => setSessionToDelete(null)}
+                  disabled={deleting}
+                  className="flex-1 py-2.5 rounded-xl border border-border text-xs font-bold text-foreground hover:bg-surface-container transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteSession}
+                  disabled={deleting}
+                  className="flex-1 py-2.5 rounded-xl bg-destructive hover:bg-destructive/90 text-destructive-foreground text-xs font-bold transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  <span>{deleting ? 'Deleting...' : 'Delete Session'}</span>
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </Portal>
       )}
     </div>
   );

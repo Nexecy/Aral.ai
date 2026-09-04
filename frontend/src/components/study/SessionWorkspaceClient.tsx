@@ -179,14 +179,16 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
   const splitContainerRef = useRef<HTMLDivElement>(null);
 
   // ── Vertical Viewer Height Resize ────────────────────────────────────────────
-  const [pdfHeight, setPdfHeight] = useState<number>(760);
+  const [pdfHeight, setPdfHeight] = useState<number>(580);
+  const isVDraggingRef = useRef<boolean>(false);
   const [isVDragging, setIsVDragging] = useState<boolean>(false);
   const vDragStartY = useRef<number>(0);
-  const vDragStartH = useRef<number>(760);
+  const vDragStartH = useRef<number>(580);
 
   // ── Exit ─────────────────────────────────────────────────────────────────────
   const [showExitDialog, setShowExitDialog] = useState<boolean>(false);
   const [exiting, setExiting] = useState<boolean>(false);
+  const isExitingRef = useRef<boolean>(false);
   const [exitError, setExitError] = useState<string | null>(null);
 
   // ── Detachable Chat ──────────────────────────────────────────────────────────
@@ -262,7 +264,7 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
     const savedH = localStorage.getItem('aral_pdf_height');
     if (savedH) {
       const n = parseInt(savedH, 10);
-      if (!isNaN(n) && n >= 400 && n <= 1100) setPdfHeight(n);
+      if (!isNaN(n) && n >= 360 && n <= 950) setPdfHeight(n);
     }
     const savedDetach = sessionStorage.getItem(`aral_chat_detached_${sessionId}`);
     if (savedDetach === 'true') setChatDetached(true);
@@ -326,7 +328,7 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
 
     const onMove = (e: PointerEvent) => {
       const delta = e.clientY - vDragStartY.current;
-      latestPdfHeight.current = Math.min(Math.max(vDragStartH.current + delta, 400), 1100);
+      latestPdfHeight.current = Math.min(Math.max(vDragStartH.current + delta, 360), 950);
       scheduleDragCommit(() => setPdfHeight(latestPdfHeight.current));
     };
     const onUp = () => {
@@ -371,12 +373,13 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
 
   // ── Link the focus timer to this session (persists across section navigation) ─
   useEffect(() => {
+    if (isExitingRef.current || exiting) return;
     if (snapshot?.session?.title) {
       linkSession(sessionId, snapshot.session.title);
     } else {
       linkSession(sessionId);
     }
-  }, [sessionId, snapshot?.session?.title, linkSession]);
+  }, [sessionId, snapshot?.session?.title, linkSession, exiting]);
 
   // ── Fetch snapshot, falling back to the offline cache ────────────────────────
   useEffect(() => {
@@ -452,7 +455,7 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
   const timerCheckpoint = Math.floor(timeLeft / 5);
 
   useEffect(() => {
-    if (!snapshot || exiting) return;
+    if (!snapshot || exiting || isExitingRef.current) return;
     saver.queue(sessionId, {
       title: snapshot.session.title,
       documentId: snapshot.document?.id || null,
@@ -478,16 +481,22 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
 
   // Flush any pending write if the tab is closed or backgrounded mid-session.
   useEffect(() => {
-    const flush = () => saver.flush();
+    const flush = () => {
+      if (!isExitingRef.current && !exiting) {
+        saver.flush();
+      }
+    };
     window.addEventListener('beforeunload', flush);
     // `document` is shadowed by the session's document record in this scope.
     window.document.addEventListener('visibilitychange', flush);
     return () => {
       window.removeEventListener('beforeunload', flush);
       window.document.removeEventListener('visibilitychange', flush);
-      saver.flush();
+      if (!isExitingRef.current && !exiting) {
+        saver.flush();
+      }
     };
-  }, [saver]);
+  }, [saver, exiting]);
 
   const handleFileFetched = useCallback((blob: Blob) => {
     void cacheDocumentBlob(sessionId, blob).then((stored) => {
@@ -584,6 +593,7 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
 
   // ── Exit session ──────────────────────────────────────────────────────────────
   const handleConfirmExit = useCallback(async () => {
+    isExitingRef.current = true;
     setExiting(true);
     setExitError(null);
     saver.cancel();
@@ -603,6 +613,7 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
       window.dispatchEvent(new CustomEvent('aral:session-ended'));
       router.replace('/workspace/');
     } catch (err: any) {
+      isExitingRef.current = false;
       // Keep the cache so nothing is lost, and let the user retry or leave anyway.
       await saveSessionState(sessionId, { finished: false, userId: user?.id ?? null });
       setExitError(err.message || 'Could not sync this session. Check your connection.');
@@ -610,10 +621,12 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
     }
   }, [
     sessionId, isRunning, pauseTimer, sessionFocusSeconds, cardsReviewed,
-    resetSessionFocus, linkSession, router, saver
+    resetSessionFocus, linkSession, router, saver, user?.id
   ]);
 
   const handleDiscardAndLeave = useCallback(async () => {
+    isExitingRef.current = true;
+    setExiting(true);
     saver.cancel();
     if (isRunning) pauseTimer();
     try {
@@ -1088,7 +1101,7 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
               <DocumentViewer
                 document={document}
                 sessionTitle={session.title}
-                height={viewMode === 'pdf' ? Math.max(pdfHeight, 820) : pdfHeight}
+                height={viewMode === 'pdf' ? Math.min(Math.max(pdfHeight, 580), 720) : pdfHeight}
                 onAskTutor={handleAskTutor}
                 onCreateFlashcard={handleCreateFlashcard}
                 onExplainConcept={handleExplainConcept}

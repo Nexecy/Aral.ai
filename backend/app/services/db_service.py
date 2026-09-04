@@ -126,6 +126,54 @@ class DBService:
 
         return self.documents.get(doc_id)
 
+    async def update_document(self, doc_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        clean_updates = {k: v for k, v in updates.items() if v is not None}
+        if not clean_updates:
+            return await self.get_document(doc_id)
+
+        if self.supabase:
+            try:
+                res = self.supabase.table("documents").update(clean_updates).eq("id", doc_id).execute()
+                if res.data:
+                    doc = res.data[0]
+                    if doc_id in self.documents:
+                        self.documents[doc_id].update(doc)
+                    return doc
+            except Exception as e:
+                print(f"[DBService] Supabase update document error: {e}")
+
+        if doc_id in self.documents:
+            self.documents[doc_id].update(clean_updates)
+            return self.documents[doc_id]
+        return None
+
+    async def delete_document(self, doc_id: str) -> bool:
+        if self.supabase:
+            try:
+                try:
+                    self.supabase.table("exams").update({"document_id": None}).eq("document_id", doc_id).execute()
+                except Exception:
+                    pass
+                try:
+                    self.supabase.table("sessions").update({"document_id": None}).eq("document_id", doc_id).execute()
+                except Exception:
+                    pass
+                self.supabase.table("documents").delete().eq("id", doc_id).execute()
+            except Exception as e:
+                print(f"[DBService] Supabase delete document error: {e}")
+
+        # In-memory clean up
+        self.documents.pop(doc_id, None)
+        for s in self.sessions.values():
+            if s.get("document_id") == doc_id:
+                s["document_id"] = None
+                s.pop("document", None)
+        for e in self.exams.values():
+            if e.get("document_id") == doc_id:
+                e["document_id"] = None
+                e.pop("document", None)
+        return True
+
     # --------------------------------------------------------------------------
     # Session Operations
     # --------------------------------------------------------------------------
