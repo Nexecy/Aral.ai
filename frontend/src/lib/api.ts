@@ -60,7 +60,17 @@ class ApiClient {
     });
   }
 
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  /** Lightweight ping to wake up free-tier backend host upon landing */
+  async pingBackend(): Promise<boolean> {
+    try {
+      const res = await fetch(`${API_BASE}/health`, { method: 'GET' });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  private async request<T>(endpoint: string, options: RequestInit = {}, retriesLeft = 1): Promise<T> {
     const url = `${API_BASE}${endpoint}`;
     const headers = {
       ...this.getHeaders(options.body instanceof FormData ? null : 'application/json'),
@@ -68,7 +78,7 @@ class ApiClient {
     };
 
     const controller = new AbortController();
-    const timeoutTimer = setTimeout(() => controller.abort(), 60000);
+    const timeoutTimer = setTimeout(() => controller.abort(), 90000);
     const signal = options.signal || controller.signal;
 
     let res: Response;
@@ -82,10 +92,23 @@ class ApiClient {
       if (err.name === 'AbortError') {
         throw new Error(`Request timed out while connecting to ${url}`);
       }
-      if (
+      const isNetworkError =
         err instanceof TypeError ||
-        (err?.message && /failed to fetch|networkerror|load failed/i.test(err.message))
-      ) {
+        (err?.message && /failed to fetch|networkerror|load failed/i.test(err.message));
+
+      if (isNetworkError && retriesLeft > 0) {
+        // Wait 1.8s and retry once to smoothly absorb cold-start sleep or container redeploy
+        await new Promise((resolve) => setTimeout(resolve, 1800));
+        return this.request<T>(endpoint, options, retriesLeft - 1);
+      }
+
+      if (isNetworkError) {
+        const isRemote = !API_BASE.includes('localhost') && !API_BASE.includes('127.0.0.1');
+        if (isRemote) {
+          throw new Error(
+            `Unable to connect to Aral.ai API at ${API_BASE}. The backend may be waking up from cold sleep (Render free tier can take up to ~45s) or redeploying. Please wait a few seconds and try again.`
+          );
+        }
         throw new Error(
           `Unable to connect to Aral.ai API at ${API_BASE}. If running locally, please ensure the backend is started (e.g. run "python start_dev.py" or "python -m uvicorn app.main:app --port 8000").`
         );
@@ -297,9 +320,12 @@ class ApiClient {
       };
 
       xhr.onerror = () => {
+        const isRemote = !API_BASE.includes('localhost') && !API_BASE.includes('127.0.0.1');
         reject(
           new Error(
-            `Unable to connect to Aral.ai API at ${API_BASE}. If running locally, please ensure the backend is started (e.g. run "python start_dev.py" or "python -m uvicorn app.main:app --port 8000"). If using a remote backend, verify NEXT_PUBLIC_API_URL in frontend/.env.local.`
+            isRemote
+              ? `Unable to connect to Aral.ai API at ${API_BASE}. The backend may be waking up from cold sleep or restarting. Please try again in a few seconds.`
+              : `Unable to connect to Aral.ai API at ${API_BASE}. If running locally, please ensure the backend is started (e.g. run "python start_dev.py" or "python -m uvicorn app.main:app --port 8000").`
           )
         );
       };
@@ -549,9 +575,12 @@ class ApiClient {
         err instanceof TypeError ||
         (err?.message && /failed to fetch|networkerror|load failed/i.test(err.message))
       ) {
+        const isRemote = !API_BASE.includes('localhost') && !API_BASE.includes('127.0.0.1');
         onError(
           new Error(
-            `Unable to connect to Aral.ai API at ${API_BASE}. If running locally, please ensure the backend is started (e.g. run "python start_dev.py" or "python -m uvicorn app.main:app --port 8000"). If using a remote backend, verify NEXT_PUBLIC_API_URL in frontend/.env.local.`
+            isRemote
+              ? `Unable to connect to Aral.ai API at ${API_BASE}. The backend may be waking up from cold sleep or restarting. Please wait a moment and try again.`
+              : `Unable to connect to Aral.ai API at ${API_BASE}. If running locally, please ensure the backend is started (e.g. run "python start_dev.py" or "python -m uvicorn app.main:app --port 8000").`
           )
         );
       } else {

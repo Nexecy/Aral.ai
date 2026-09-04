@@ -55,6 +55,7 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
+    void api.pingBackend();
     void load();
   }, [load]);
 

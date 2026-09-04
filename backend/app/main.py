@@ -1,5 +1,7 @@
 import os
-from fastapi import FastAPI
+import traceback
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from app.core.config import settings
@@ -46,6 +48,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Global exception handler ensures 500 responses retain CORS headers
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    traceback.print_exc()
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Internal server error: {str(exc)}"},
+    )
+
 # Include API Routers
 app.include_router(auth.router, prefix="/api")
 app.include_router(documents.router, prefix="/api")
@@ -58,6 +69,7 @@ app.include_router(pomodoro.router, prefix="/api")
 app.include_router(exams.router, prefix="/api")
 
 @app.get("/")
+@app.get("/api/health")
 async def root():
     return {
         "app": "Aral.ai API",
@@ -72,3 +84,4 @@ async def root():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app.main:app", host=settings.HOST, port=settings.PORT, reload=True)
+
