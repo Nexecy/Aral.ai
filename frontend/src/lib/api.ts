@@ -202,6 +202,13 @@ class ApiClient {
     });
   }
 
+  async loginWithGoogle(credential: string): Promise<AuthSession> {
+    return this.request('/auth/google', {
+      method: 'POST',
+      body: JSON.stringify({ credential })
+    });
+  }
+
   async forgotPassword(email: string): Promise<{ ok: boolean; message: string }> {
     return this.request('/auth/forgot-password', {
       method: 'POST',

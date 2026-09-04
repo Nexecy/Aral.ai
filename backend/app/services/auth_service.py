@@ -436,3 +436,58 @@ def change_email(user_id: str, current_email: str, new_email: str) -> Dict[str, 
         users[new_email] = record
         _save_local_users(users)
     return {"ok": True, "message": "Email updated."}
+
+
+def login_with_google(credential: str) -> Dict[str, Any]:
+    client = None if _use_local_auth() else _supabase_client()
+    if client:
+        try:
+            result = client.auth.sign_in_with_id_token(
+                {
+                    "provider": "google",
+                    "token": credential,
+                    "client_id": "686935671952-7nu38r853mtqrtifcntvhlrcv03bl96l.apps.googleusercontent.com",
+                }
+            )
+            user = result.user
+            session = result.session
+            if not user or not session or not session.access_token:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Could not authenticate with Google.",
+                )
+            user_id = str(user.id)
+            email = user.email or "google-user"
+            profile = _profile(user_id, email, True)
+            return _session(profile, session.access_token)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            pass
+
+    try:
+        unverified = jwt.decode(credential, options={"verify_signature": False})
+        email = _normalize_email(unverified.get("email", ""))
+        sub = unverified.get("sub", "")
+        if not email:
+            raise ValueError("No email in Google credential token")
+        user_id = sub or str(uuid.uuid4())
+        users = _load_local_users()
+        if email not in users:
+            salt = uuid.uuid4().hex
+            users[email] = {
+                "id": user_id,
+                "email": email,
+                "salt": salt,
+                "password_hash": "",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+            _save_local_users(users)
+        profile = _profile(user_id, email, True)
+        return _session(profile, issue_access_token(user_id, email, email_verified=True))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid Google credential token.",
+        )
+

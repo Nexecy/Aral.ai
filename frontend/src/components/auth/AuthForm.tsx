@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { AuthScreen } from '@/components/auth/AuthScreen';
 import { signInWithSocial } from '@/lib/socialAuth';
+import { initGoogleIdentity } from '@/lib/googleAuth';
 
 interface AuthFormProps {
   mode: 'login' | 'signup';
@@ -18,7 +19,7 @@ function isValidEmail(value: string): boolean {
 
 export function AuthForm({ mode }: AuthFormProps) {
   const router = useRouter();
-  const { login, signup } = useAuth();
+  const { login, signup, establishSession } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -27,8 +28,49 @@ export function AuthForm({ mode }: AuthFormProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   const isSignup = mode === 'signup';
+
+  const handleGoogleSuccess = async (accessToken: string) => {
+    setGoogleLoading(true);
+    try {
+      await establishSession(accessToken);
+      router.replace('/');
+    } catch (err: any) {
+      setError(err?.message || 'Failed to complete Google sign-in.');
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  const handleGoogleError = (errMsg: string) => {
+    setError(errMsg);
+    setGoogleLoading(false);
+  };
+
+  useEffect(() => {
+    let timer = setTimeout(() => {
+      initGoogleIdentity(handleGoogleSuccess, handleGoogleError);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  const handleGoogleClick = () => {
+    setError(null);
+    if (typeof window !== 'undefined' && window.google?.accounts?.id) {
+      initGoogleIdentity(handleGoogleSuccess, handleGoogleError);
+      window.google.accounts.id.prompt((notification) => {
+        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+          // Fallback to social auth redirect if browser suppresses One-Tap
+          signInWithSocial('google');
+        }
+      });
+    } else {
+      signInWithSocial('google');
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -201,11 +243,12 @@ export function AuthForm({ mode }: AuthFormProps) {
         <div className="grid grid-cols-2 gap-3 pt-1">
           <button
             type="button"
-            onClick={() => signInWithSocial('google')}
-            className="flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-xl border border-border bg-surface-container-low hover:bg-surface-container text-xs sm:text-sm font-bold text-foreground transition-all hover:border-primary/40 active:scale-98 shadow-2xs"
+            disabled={googleLoading || submitting}
+            onClick={handleGoogleClick}
+            className="flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-xl border border-border bg-surface-container-low hover:bg-surface-container text-xs sm:text-sm font-bold text-foreground transition-all hover:border-primary/40 active:scale-98 shadow-2xs disabled:opacity-60"
             title="Continue with Google"
           >
-            <GoogleIcon className="w-4 h-4 shrink-0" />
+            {googleLoading ? <Loader2 className="w-4 h-4 animate-spin text-primary" /> : <GoogleIcon className="w-4 h-4 shrink-0" />}
             <span>Google</span>
           </button>
 

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Script from 'next/script';
 import { Hanken_Grotesk, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 import { ThemeProvider } from '@/context/ThemeContext';
@@ -80,6 +81,7 @@ export default function RootLayout({
             </NotificationProvider>
           </AuthProvider>
         </ThemeProvider>
+        <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" />
       </body>
     </html>
   );

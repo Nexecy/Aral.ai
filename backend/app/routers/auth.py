@@ -10,6 +10,7 @@ from app.models.schemas import (
     AuthCodeExchange,
     AuthCredentials,
     AuthEmailRequest,
+    AuthGoogleToken,
     AuthPasswordChange,
     AuthPasswordUpdate,
     AuthSessionResponse,
@@ -78,6 +79,12 @@ async def reset_password(
 @router.post("/exchange-code", response_model=AuthSessionResponse)
 async def exchange_code(payload: AuthCodeExchange):
     return auth_service.exchange_code(payload.code)
+
+
+@router.post("/google", response_model=AuthSessionResponse)
+async def login_google(payload: AuthGoogleToken):
+    return auth_service.login_with_google(payload.credential)
+
 
 
 @router.get("/me")
