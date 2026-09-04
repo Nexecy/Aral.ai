@@ -29,6 +29,7 @@ export function AuthForm({ mode }: AuthFormProps) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const googleBtnRef = React.useRef<HTMLDivElement>(null);
 
   const isSignup = mode === 'signup';
 
@@ -50,25 +51,39 @@ export function AuthForm({ mode }: AuthFormProps) {
   };
 
   useEffect(() => {
-    let timer = setTimeout(() => {
-      initGoogleIdentity(handleGoogleSuccess, handleGoogleError);
-    }, 500);
+    let rendered = false;
+    const setupGoogle = () => {
+      if (typeof window !== 'undefined' && window.google?.accounts?.id) {
+        initGoogleIdentity(handleGoogleSuccess, handleGoogleError);
+        if (googleBtnRef.current && !rendered) {
+          try {
+            window.google.accounts.id.renderButton(googleBtnRef.current, {
+              type: 'standard',
+              theme: 'outline',
+              size: 'large',
+              text: 'continue_with',
+              shape: 'pill',
+              logo_alignment: 'left',
+              width: 175
+            });
+            rendered = true;
+          } catch {
+            // fallback
+          }
+        }
+      }
+    };
 
-    return () => clearTimeout(timer);
+    setupGoogle();
+    const interval = setInterval(setupGoogle, 500);
+    return () => clearInterval(interval);
   }, []);
 
   const handleGoogleClick = () => {
     setError(null);
     if (typeof window !== 'undefined' && window.google?.accounts?.id) {
       initGoogleIdentity(handleGoogleSuccess, handleGoogleError);
-      window.google.accounts.id.prompt((notification) => {
-        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-          // Fallback to social auth redirect if browser suppresses One-Tap
-          signInWithSocial('google');
-        }
-      });
-    } else {
-      signInWithSocial('google');
+      window.google.accounts.id.prompt();
     }
   };
 
@@ -240,22 +255,25 @@ export function AuthForm({ mode }: AuthFormProps) {
         </div>
 
         {/* Social Auth Buttons */}
-        <div className="grid grid-cols-2 gap-3 pt-1">
-          <button
-            type="button"
-            disabled={googleLoading || submitting}
-            onClick={handleGoogleClick}
-            className="flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-xl border border-border bg-surface-container-low hover:bg-surface-container text-xs sm:text-sm font-bold text-foreground transition-all hover:border-primary/40 active:scale-98 shadow-2xs disabled:opacity-60"
-            title="Continue with Google"
-          >
-            {googleLoading ? <Loader2 className="w-4 h-4 animate-spin text-primary" /> : <GoogleIcon className="w-4 h-4 shrink-0" />}
-            <span>Google</span>
-          </button>
+        <div className="grid grid-cols-2 gap-3 pt-1 items-center">
+          <div className="relative w-full h-[42px] flex items-center justify-center">
+            <div ref={googleBtnRef} className="w-full h-full flex justify-center items-center z-10 [&_iframe]:!max-w-full" />
+            <button
+              type="button"
+              disabled={googleLoading || submitting}
+              onClick={handleGoogleClick}
+              className="absolute inset-0 z-0 flex items-center justify-center gap-2.5 py-2 px-3 rounded-xl border border-border bg-surface-container-low hover:bg-surface-container text-xs sm:text-sm font-bold text-foreground transition-all hover:border-primary/40 active:scale-98 shadow-2xs disabled:opacity-60"
+              title="Continue with Google"
+            >
+              {googleLoading ? <Loader2 className="w-4 h-4 animate-spin text-primary" /> : <GoogleIcon className="w-4 h-4 shrink-0" />}
+              <span>Google</span>
+            </button>
+          </div>
 
           <button
             type="button"
             onClick={() => signInWithSocial('facebook')}
-            className="flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-xl border border-border bg-surface-container-low hover:bg-surface-container text-xs sm:text-sm font-bold text-foreground transition-all hover:border-primary/40 active:scale-98 shadow-2xs"
+            className="flex items-center justify-center gap-2.5 py-2 px-3 rounded-xl border border-border bg-surface-container-low hover:bg-surface-container text-xs sm:text-sm font-bold text-foreground transition-all hover:border-primary/40 active:scale-98 shadow-2xs h-[42px]"
             title="Continue with Facebook"
           >
             <FacebookIcon className="w-4 h-4 shrink-0" />
