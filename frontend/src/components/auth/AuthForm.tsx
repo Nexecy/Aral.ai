@@ -278,12 +278,12 @@ export function AuthForm({ mode }: AuthFormProps) {
             {!googleLoaded && (
               <div
                 aria-hidden="true"
-                className="absolute inset-0 w-full h-[40px] flex items-center justify-center rounded-[4px] border border-[#dadce0] dark:border-[#5f6368] bg-white dark:bg-[#131314] select-none pointer-events-none animate-pulse"
+                className="absolute inset-0 w-full h-[40px] flex items-center rounded-[4px] border border-[#dadce0] dark:border-[#747775] bg-white dark:bg-[#131314] select-none pointer-events-none animate-pulse overflow-hidden"
               >
-                <div className="absolute left-[12px] top-1/2 -translate-y-1/2 w-[18px] h-[18px] flex items-center justify-center">
+                <div className="w-[40px] h-[40px] min-w-[40px] flex items-center justify-center bg-transparent dark:bg-white dark:rounded-l-[3px]">
                   <GoogleIcon className="w-[18px] h-[18px]" />
                 </div>
-                <span className="text-[14px] font-medium tracking-[0.25px] text-[#3c4043] dark:text-[#e8eaed]">
+                <span className="flex-1 text-center text-[14px] font-medium tracking-[0.25px] text-[#3c4043] dark:text-[#e8eaed] font-sans">
                   Sign in
                 </span>
               </div>
@@ -314,13 +314,15 @@ export function AuthForm({ mode }: AuthFormProps) {
                 }
               );
             }}
-            className="relative w-full h-[40px] flex items-center justify-center rounded-[4px] border border-[#dadce0] dark:border-[#5f6368] bg-white dark:bg-[#131314] hover:bg-[#f8f9fa] dark:hover:bg-[#202124] active:bg-[#f1f3f4] dark:active:bg-[#2b2d30] text-[#3c4043] dark:text-[#e8eaed] transition-colors shadow-none cursor-pointer select-none"
+            className="group relative w-full h-[40px] flex items-center rounded-[4px] border border-[#dadce0] dark:border-[#747775] bg-white dark:bg-[#131314] hover:bg-[#f8f9fa] dark:hover:bg-[#202124] active:bg-[#f1f3f4] dark:active:bg-[#2b2d30] text-[#3c4043] dark:text-[#e8eaed] transition-colors shadow-none cursor-pointer select-none overflow-hidden"
             title="Sign in with Facebook"
           >
-            <div className="absolute left-[12px] top-1/2 -translate-y-1/2 w-[18px] h-[18px] flex items-center justify-center">
+            {/* Left Icon Badge - mirrors Google's white logo badge structure in dark mode */}
+            <div className="w-[40px] h-[40px] min-w-[40px] flex items-center justify-center bg-transparent dark:bg-white dark:rounded-l-[3px] transition-colors">
               <FacebookIcon className="w-[18px] h-[18px]" />
             </div>
-            <span className="text-[14px] font-medium tracking-[0.25px]">
+            {/* Label centered within the remaining space, identical to Google button */}
+            <span className="flex-1 text-center text-[14px] font-medium tracking-[0.25px] font-sans">
               Sign in
             </span>
           </button>
