@@ -47,11 +47,14 @@ export function AuthForm({ mode }: AuthFormProps) {
 
   useEffect(() => {
     let rendered = false;
+    let timer: any = null;
+
     const setupGoogle = () => {
       if (typeof window !== 'undefined' && window.google?.accounts?.id && googleBtnRef.current && !rendered) {
         initGoogleIdentity(handleGoogleSuccess, handleGoogleError);
         try {
-          const width = googleBtnRef.current.offsetWidth || 180;
+          const width = googleBtnRef.current.offsetWidth || 185;
+          googleBtnRef.current.innerHTML = '';
           window.google.accounts.id.renderButton(googleBtnRef.current, {
             type: 'standard',
             theme: 'outline',
@@ -63,6 +66,7 @@ export function AuthForm({ mode }: AuthFormProps) {
           });
           rendered = true;
           setGoogleReady(true);
+          if (timer) clearInterval(timer);
         } catch {
           // fallback
         }
@@ -70,8 +74,10 @@ export function AuthForm({ mode }: AuthFormProps) {
     };
 
     setupGoogle();
-    const interval = setInterval(setupGoogle, 250);
-    return () => clearInterval(interval);
+    timer = setInterval(setupGoogle, 200);
+    return () => {
+      if (timer) clearInterval(timer);
+    };
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -247,30 +253,30 @@ export function AuthForm({ mode }: AuthFormProps) {
 
         {/* Social Auth Buttons */}
         <div className="grid grid-cols-2 gap-3 pt-1">
-          {/* Google Sign-In with Pre-aligned Zero-Flicker Skeleton */}
-          <div
-            onClick={() => {
-              if (!googleReady) {
-                signInWithSocial('google');
-              }
-            }}
-            className="relative w-full h-[40px] flex items-center justify-center rounded-[4px] border border-[#dadce0] dark:border-[#5f6368] bg-white dark:bg-[#131314] overflow-hidden select-none cursor-pointer"
-            title="Sign in with Google"
-          >
-            {/* Pre-rendered layout: identical logo position & text to prevent any flicker */}
-            <div className="absolute inset-0 w-full h-full flex items-center justify-center pointer-events-none select-none">
-              <div className="absolute left-[12px] top-1/2 -translate-y-1/2 w-[18px] h-[18px] flex items-center justify-center">
-                <GoogleIcon className="w-[18px] h-[18px]" />
+          {/* Google Sign-In */}
+          <div className="relative w-full h-[40px] flex items-center justify-center">
+            {/* Fallback skeleton while GIS initializes */}
+            {!googleReady && (
+              <div
+                onClick={() => signInWithSocial('google')}
+                className="w-full h-[40px] flex items-center justify-center rounded-[4px] border border-[#dadce0] dark:border-[#5f6368] bg-white dark:bg-[#131314] text-[#3c4043] dark:text-[#e8eaed] select-none cursor-pointer"
+                title="Sign in with Google"
+              >
+                <div className="absolute left-[12px] top-1/2 -translate-y-1/2 w-[18px] h-[18px] flex items-center justify-center">
+                  <GoogleIcon className="w-[18px] h-[18px]" />
+                </div>
+                <span className="text-[14px] font-medium tracking-[0.25px]">
+                  Sign in
+                </span>
               </div>
-              <span className="text-[14px] font-medium tracking-[0.25px] text-[#3c4043] dark:text-[#e8eaed]">
-                Sign in
-              </span>
-            </div>
+            )}
 
-            {/* Real Google Identity iframe mounts smoothly in-place */}
+            {/* Google Identity Services Container */}
             <div
               ref={googleBtnRef}
-              className="relative z-10 w-full h-[40px] flex items-center justify-center [&_iframe]:!w-full [&_iframe]:!h-[40px]"
+              className={`w-full h-[40px] flex items-center justify-center ${
+                googleReady ? 'flex' : 'hidden'
+              } [&_iframe]:!w-full [&_iframe]:!h-[40px]`}
             />
           </div>
 
