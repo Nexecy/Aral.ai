@@ -5,6 +5,15 @@ All notable changes to Aral.ai are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] — 2026-09-05
+
+### Added
+- Dedicated Google API Services and User Data Policy compliance disclosures in `/privacy`
+- Added Google Account access revocation instructions via Google Security Settings
+- Exposed public access to `/privacy` without authentication requirement
+- Linked Privacy Policy and Terms of Service directly on auth and social login interfaces
+- Google Search Console site ownership verification asset
+
 ## [1.0.0] — 2026-08-31
 
 Initial public-scale release of Aral.ai: a Next.js + FastAPI study app for notes, flashcards, quizzes, tutoring, focus timing, and exam tracking.
