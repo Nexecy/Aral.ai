@@ -26,6 +26,8 @@ const AUTH_LAYOUT_PATHS = [
   '/reset-password/',
   '/confirm',
   '/confirm/',
+  '/privacy',
+  '/privacy/',
   '/terms',
   '/terms/'
 ];

@@ -48,30 +48,95 @@ export default function PrivacyPolicyPage() {
             </section>
 
             <section className="space-y-2.5">
-              <h2 className="text-base font-bold text-foreground">4. Third-Party Services</h2>
+              <h2 className="text-base font-bold text-foreground">4. Third-Party Services &amp; Infrastructure</h2>
               <p>
-                We integrate with trusted providers strictly for authentication, database hosting, and AI generation:
+                We integrate with trusted service providers strictly for authentication, database hosting, and AI generation:
               </p>
               <ul className="list-disc pl-5 space-y-1.5">
-                <li><strong className="text-foreground">Supabase:</strong> Secure PostgreSQL database, user authentication, and file storage.</li>
-                <li><strong className="text-foreground">Google &amp; Meta / Facebook:</strong> Optional 1-click social sign-in.</li>
-                <li><strong className="text-foreground">Groq &amp; Google Gemini:</strong> AI processing for study materials.</li>
+                <li><strong className="text-foreground">Supabase:</strong> Secure PostgreSQL database, user authentication, session management, and encrypted storage.</li>
+                <li><strong className="text-foreground">Google OAuth &amp; Meta / Facebook Login:</strong> Optional, secure social single sign-on (SSO).</li>
+                <li><strong className="text-foreground">Groq &amp; Google Gemini:</strong> AI processing for study material summarization, flashcards, and quizzes.</li>
               </ul>
+            </section>
+
+            <section id="google-data-policy" className="space-y-3 pt-4 border-t border-border">
+              <h2 className="text-lg font-extrabold text-foreground flex items-center gap-2">
+                <span>5. Google API Services &amp; User Data Policy</span>
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                  Google Verification
+                </span>
+              </h2>
+              <p>
+                Aral.ai allows users to sign in using their Google account via Google OAuth. We value your privacy and are transparent about how your Google data is handled:
+              </p>
+              
+              <div className="bg-muted/30 p-4 rounded-2xl border border-border space-y-3 text-xs sm:text-sm">
+                <div>
+                  <strong className="text-foreground block mb-1">Google Data Accessed:</strong>
+                  <p>When you authenticate with Google, we request access only to your primary Google account email address (<code>email</code>), basic profile information including your display name and profile picture URL (<code>profile</code>), and your unique identifier (<code>openid</code>).</p>
+                </div>
+                <div>
+                  <strong className="text-foreground block mb-1">Purpose of Collection:</strong>
+                  <p>This data is strictly utilized to authenticate your identity, create and manage your Aral.ai account profile, and safeguard your study materials. We do not access your Google Drive, Gmail, or any other personal Google services.</p>
+                </div>
+                <div>
+                  <strong className="text-foreground block mb-1">Data Storage &amp; Protection:</strong>
+                  <p>All Google user data is transmitted securely over TLS/SSL encryption and stored in our protected database managed by Supabase, protected with strict row-level security (RLS) policies.</p>
+                </div>
+                <div>
+                  <strong className="text-foreground block mb-1">No Selling or AI Training:</strong>
+                  <p>We do not sell, rent, or transfer your Google user data to data brokers or advertising networks. We never use your Google user data to train general-purpose artificial intelligence or machine learning models.</p>
+                </div>
+              </div>
+
+              <div className="bg-primary/5 p-4 rounded-2xl border border-primary/20 text-xs sm:text-sm space-y-2">
+                <strong className="text-foreground font-bold block">Google API Services Limited Use Disclosure:</strong>
+                <p className="italic">
+                  Aral.ai&apos;s use and transfer to any other app of information received from Google APIs will adhere to the{' '}
+                  <a
+                    href="https://developers.google.com/terms/api-services-user-data-policy"
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="text-primary font-semibold hover:underline inline-flex items-center gap-0.5"
+                  >
+                    Google API Services User Data Policy
+                  </a>
+                  , including the Limited Use requirements.
+                </p>
+              </div>
             </section>
 
             <section id="data-deletion" className="space-y-3 pt-4 border-t border-border">
               <h2 className="text-lg font-extrabold text-foreground flex items-center gap-2">
-                <span>5. User Data Deletion Instructions</span>
+                <span>6. User Data Deletion &amp; Access Revocation</span>
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
                   Compliance
                 </span>
               </h2>
               <p>
-                According to Meta/Facebook Platform rules and international data protection laws (GDPR/Data Privacy Act), you have the right to request the deletion of all your personal data and account records stored on Aral.ai.
+                According to Google API Policies, Meta/Facebook Platform rules, and data privacy regulations (such as GDPR and the Data Privacy Act), you have full control over your personal data and account records stored on Aral.ai.
               </p>
 
               <div className="bg-muted/40 p-4 rounded-2xl border border-border space-y-3">
-                <h3 className="text-sm font-bold text-foreground">Option A: Automatic In-App Deletion</h3>
+                <h3 className="text-sm font-bold text-foreground">Option A: Revoke Google Account Access</h3>
+                <ol className="list-decimal pl-5 space-y-1 text-xs sm:text-sm">
+                  <li>Visit your Google Account&apos;s Third-party apps &amp; services dashboard at{' '}
+                    <a
+                      href="https://myaccount.google.com/connections"
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="text-primary font-semibold hover:underline"
+                    >
+                      myaccount.google.com/connections
+                    </a>.
+                  </li>
+                  <li>Locate <strong>Aral.ai</strong> in your list of connected apps.</li>
+                  <li>Click <strong>Delete all connections</strong> or <strong>Remove Access</strong> to immediately revoke permissions.</li>
+                </ol>
+              </div>
+
+              <div className="bg-muted/40 p-4 rounded-2xl border border-border space-y-3">
+                <h3 className="text-sm font-bold text-foreground">Option B: Automatic In-App Deletion</h3>
                 <ol className="list-decimal pl-5 space-y-1 text-xs sm:text-sm">
                   <li>Log in to your account at <Link href="/login" className="text-primary hover:underline">aral-ai-three.vercel.app</Link>.</li>
                   <li>Navigate to <strong>Settings</strong> ➔ <strong>Account</strong>.</li>
@@ -80,7 +145,7 @@ export default function PrivacyPolicyPage() {
               </div>
 
               <div className="bg-muted/40 p-4 rounded-2xl border border-border space-y-3">
-                <h3 className="text-sm font-bold text-foreground">Option B: Remove Facebook Login App &amp; Data</h3>
+                <h3 className="text-sm font-bold text-foreground">Option C: Remove Facebook Login App &amp; Data</h3>
                 <ol className="list-decimal pl-5 space-y-1 text-xs sm:text-sm">
                   <li>Go to your Facebook account&apos;s <strong>Settings &amp; Privacy</strong> ➔ <strong>Settings</strong>.</li>
                   <li>Select <strong>Apps and Websites</strong> to view all apps linked to your Facebook profile.</li>
@@ -90,7 +155,7 @@ export default function PrivacyPolicyPage() {
               </div>
 
               <div className="bg-muted/40 p-4 rounded-2xl border border-border space-y-3">
-                <h3 className="text-sm font-bold text-foreground">Option C: Direct Email Request</h3>
+                <h3 className="text-sm font-bold text-foreground">Option D: Direct Email Request</h3>
                 <p className="text-xs sm:text-sm">
                   You can also email our support team directly at{' '}
                   <a href="mailto:aral.ai.app@gmail.com" className="text-primary font-semibold hover:underline">
@@ -102,7 +167,7 @@ export default function PrivacyPolicyPage() {
             </section>
 
             <section className="space-y-2.5 pt-4 border-t border-border">
-              <h2 className="text-base font-bold text-foreground">6. Contact Us</h2>
+              <h2 className="text-base font-bold text-foreground">7. Contact Us</h2>
               <p>
                 If you have any questions or feedback regarding this Privacy Policy or your data, reach out to us at:
               </p>

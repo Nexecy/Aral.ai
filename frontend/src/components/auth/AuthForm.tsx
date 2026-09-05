@@ -169,6 +169,10 @@ export function AuthForm({ mode }: AuthFormProps) {
               I agree to the{' '}
               <Link href="/terms/" className="font-bold text-primary hover:underline" target="_blank">
                 Terms and Conditions
+              </Link>{' '}
+              and{' '}
+              <Link href="/privacy/" className="font-bold text-primary hover:underline" target="_blank">
+                Privacy Policy
               </Link>
             </span>
           </label>
@@ -219,6 +223,13 @@ export function AuthForm({ mode }: AuthFormProps) {
             <span>Facebook</span>
           </button>
         </div>
+
+        <p className="text-center text-[11px] text-muted-foreground pt-3">
+          By continuing, you agree to our{' '}
+          <Link href="/terms/" className="underline hover:text-foreground">Terms</Link>
+          {' '}and{' '}
+          <Link href="/privacy/" className="underline hover:text-foreground">Privacy Policy</Link>.
+        </p>
       </form>
     </AuthScreen>
   );
