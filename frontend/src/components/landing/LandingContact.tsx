@@ -35,7 +35,7 @@ export function LandingContact() {
             Contact the Aral.ai Team
           </h2>
           <p className="text-base text-muted-foreground leading-relaxed">
-            Have a question, feedback, or looking to partner with your university club? We’d love to hear from you.
+            Have a question, feedback, or need assistance? We’d love to hear from you.
           </p>
         </div>
 
@@ -47,7 +47,7 @@ export function LandingContact() {
                 Get Direct Support
               </h3>
               <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-                Whether you’ve encountered an issue, have an idea for a feature, or want to integrate with your syllabus, reach out directly.
+                Whether you’ve encountered an issue, have an idea for a feature, or want to share feedback, reach out directly.
               </p>
 
               <div className="space-y-4 pt-2">
@@ -56,27 +56,12 @@ export function LandingContact() {
                     <Mail className="w-4 h-4" />
                   </div>
                   <div>
-                    <div className="text-xs text-muted-foreground font-medium">General & Support Email</div>
+                    <div className="text-xs text-muted-foreground font-medium">Support & Inquiries Email</div>
                     <a
-                      href="mailto:support@aral.ai"
-                      className="text-sm font-bold text-foreground hover:text-primary transition-colors"
+                      href="mailto:aral.ai.app@gmail.com"
+                      className="text-sm font-bold text-foreground hover:text-primary transition-colors break-all"
                     >
-                      support@aral.ai
-                    </a>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3.5">
-                  <div className="w-9 h-9 rounded-xl bg-sticker-teal/10 text-sticker-teal flex items-center justify-center shrink-0">
-                    <Building2 className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground font-medium">Campus & Club Partnerships</div>
-                    <a
-                      href="mailto:partners@aral.ai"
-                      className="text-sm font-bold text-foreground hover:text-primary transition-colors"
-                    >
-                      partners@aral.ai
+                      aral.ai.app@gmail.com
                     </a>
                   </div>
                 </div>
@@ -175,8 +160,8 @@ export function LandingContact() {
                     >
                       <option value="General Inquiry">General Question</option>
                       <option value="Feature Suggestion">Feature Request / Feedback</option>
-                      <option value="Club or Campus Partnership">Campus / Study Group Partnership</option>
                       <option value="Technical Support">Technical Support / Bug Report</option>
+                      <option value="Other">Other</option>
                     </select>
                   </div>
 
@@ -190,7 +175,7 @@ export function LandingContact() {
                       required
                       value={message}
                       onChange={(e) => setMessage(e.target.value)}
-                      placeholder="Tell us how we can assist you or your study group..."
+                      placeholder="Tell us how we can assist you..."
                       className="w-full text-xs sm:text-sm bg-surface-container-low px-4 py-2.5 rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-foreground placeholder:text-muted-foreground resize-none"
                     />
                   </div>

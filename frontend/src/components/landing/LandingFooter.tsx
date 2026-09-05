@@ -100,8 +100,8 @@ export function LandingFooter() {
                   </a>
                 </li>
                 <li>
-                  <a href="mailto:support@aral.ai" className="hover:text-foreground transition-colors">
-                    support@aral.ai
+                  <a href="mailto:aral.ai.app@gmail.com" className="hover:text-foreground transition-colors">
+                    aral.ai.app@gmail.com
                   </a>
                 </li>
               </ul>
