@@ -22,15 +22,15 @@ export function LandingHero() {
   const [selectedQuizOption, setSelectedQuizOption] = useState<number | null>(null);
 
   return (
-    <section className="relative pt-32 pb-20 lg:pt-36 lg:pb-32 overflow-hidden">
+    <section className="relative pt-28 pb-12 lg:pt-32 lg:pb-16 overflow-hidden">
       {/* Ambient background glows */}
-      <div className="absolute top-20 left-1/2 -translate-x-1/2 w-[600px] sm:w-[900px] h-[400px] bg-gradient-to-tr from-primary/15 via-primary/5 to-transparent rounded-full blur-3xl pointer-events-none -z-10" />
-      <div className="absolute top-48 right-10 w-72 h-72 bg-sticker-sky/10 rounded-full blur-3xl pointer-events-none -z-10" />
-      <div className="absolute top-80 left-10 w-80 h-80 bg-sticker-purple/10 rounded-full blur-3xl pointer-events-none -z-10" />
+      <div className="absolute top-20 left-1/2 -translate-x-1/2 w-[600px] sm:w-[900px] h-[350px] bg-gradient-to-tr from-primary/15 via-primary/5 to-transparent rounded-full blur-3xl pointer-events-none -z-10" />
+      <div className="absolute top-40 right-10 w-72 h-72 bg-sticker-sky/10 rounded-full blur-3xl pointer-events-none -z-10" />
+      <div className="absolute top-60 left-10 w-80 h-80 bg-sticker-purple/10 rounded-full blur-3xl pointer-events-none -z-10" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Hero Header */}
-        <div className="max-w-3xl mx-auto text-center space-y-6">
+        <div className="max-w-3xl mx-auto text-center space-y-5">
           {/* Eyebrow Badge */}
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-surface-container-high/70 border border-border/80 text-foreground text-xs font-semibold backdrop-blur-md shadow-xs">
             <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -55,7 +55,7 @@ export function LandingHero() {
           </p>
 
           {/* CTA Buttons */}
-          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3.5">
+          <div className="pt-1 flex flex-col sm:flex-row items-center justify-center gap-3.5">
             <Link
               href="/signup/"
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-7 py-3.5 rounded-full bg-primary hover:bg-primary-container text-on-primary text-sm font-bold transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5"
@@ -72,7 +72,7 @@ export function LandingHero() {
           </div>
 
           {/* Micro Trust Proof */}
-          <div className="pt-4 flex flex-wrap items-center justify-center gap-6 text-xs text-muted-foreground font-medium">
+          <div className="pt-2 flex flex-wrap items-center justify-center gap-6 text-xs text-muted-foreground font-medium">
             <div className="flex items-center gap-1.5">
               <CheckCircle2 className="w-4 h-4 text-emerald-500" />
               <span>Zero-hallucination document citations</span>
@@ -89,7 +89,7 @@ export function LandingHero() {
         </div>
 
         {/* Interactive Workspace Preview Mockup */}
-        <div className="mt-14 sm:mt-16 max-w-5xl mx-auto">
+        <div className="mt-10 sm:mt-12 max-w-5xl mx-auto">
           <div className="relative rounded-2xl sm:rounded-3xl border border-border bg-card/90 backdrop-blur-xl shadow-notion-elevated overflow-hidden">
             {/* Top Mockup Window Chrome */}
             <div className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-border bg-surface-container-lowest/80 text-xs text-muted-foreground">

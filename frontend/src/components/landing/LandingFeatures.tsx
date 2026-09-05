@@ -74,10 +74,10 @@ export function LandingFeatures() {
   ];
 
   return (
-    <section id="features" className="py-20 lg:py-28 relative">
+    <section id="features" className="py-12 lg:py-16 relative">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="max-w-3xl mx-auto text-center space-y-4">
+        <div className="max-w-3xl mx-auto text-center space-y-3">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 text-xs font-bold uppercase tracking-wider">
             <Sparkles className="w-3.5 h-3.5" />
             <span>Comprehensive Toolset</span>
@@ -91,29 +91,29 @@ export function LandingFeatures() {
         </div>
 
         {/* Feature Cards Grid */}
-        <div className="mt-14 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+        <div className="mt-9 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
           {features.map((feat, idx) => {
             const Icon = feat.icon;
             return (
               <div
                 key={idx}
-                className="group relative rounded-2xl p-7 bg-card border border-border hover:border-primary/50 transition-all duration-200 shadow-notion-soft hover:shadow-md flex flex-col justify-between"
+                className="group relative rounded-2xl p-6 sm:p-7 bg-card border border-border hover:border-primary/50 transition-all duration-200 shadow-notion-soft hover:shadow-md flex flex-col justify-between"
               >
-                <div className="space-y-4">
+                <div className="space-y-3.5">
                   <div className="flex items-center justify-between">
-                    <div className="w-12 h-12 rounded-xl bg-surface-container flex items-center justify-center text-primary group-hover:scale-105 transition-transform">
-                      <Icon className="w-6 h-6" />
+                    <div className="w-11 h-11 rounded-xl bg-surface-container flex items-center justify-center text-primary group-hover:scale-105 transition-transform">
+                      <Icon className="w-5 h-5" />
                     </div>
                     <span className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-full border ${feat.accent}`}>
                       {feat.badge}
                     </span>
                   </div>
 
-                  <div className="space-y-1.5">
+                  <div className="space-y-1">
                     <span className="text-[10px] font-mono uppercase tracking-wider font-bold text-muted-foreground">
                       {feat.category}
                     </span>
-                    <h3 className="text-lg font-bold text-foreground group-hover:text-primary transition-colors">
+                    <h3 className="text-base sm:text-lg font-bold text-foreground group-hover:text-primary transition-colors">
                       {feat.title}
                     </h3>
                   </div>
@@ -123,7 +123,7 @@ export function LandingFeatures() {
                   </p>
                 </div>
 
-                <div className="pt-5 mt-4 border-t border-border/60 flex items-center text-xs font-bold text-primary group-hover:translate-x-1 transition-transform">
+                <div className="pt-4 mt-3 border-t border-border/60 flex items-center text-xs font-bold text-primary group-hover:translate-x-1 transition-transform">
                   <span>Explore in workspace</span>
                   <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
                 </div>
@@ -133,11 +133,11 @@ export function LandingFeatures() {
         </div>
 
         {/* Bottom Banner */}
-        <div className="mt-16 rounded-3xl p-8 sm:p-10 bg-gradient-to-br from-primary/10 via-surface-container to-sticker-purple/10 border border-primary/20 text-center space-y-5">
-          <h3 className="text-2xl font-extrabold text-foreground tracking-tight">
+        <div className="mt-10 rounded-2xl p-6 sm:p-8 bg-gradient-to-br from-primary/10 via-surface-container to-sticker-purple/10 border border-primary/20 text-center space-y-4">
+          <h3 className="text-xl sm:text-2xl font-extrabold text-foreground tracking-tight">
             Ready to experience active recall in action?
           </h3>
-          <p className="text-sm text-muted-foreground max-w-xl mx-auto leading-relaxed">
+          <p className="text-xs sm:text-sm text-muted-foreground max-w-xl mx-auto leading-relaxed">
             Create an account in 30 seconds and upload your first syllabus, textbook, or lecture deck.
           </p>
           <div className="pt-2">

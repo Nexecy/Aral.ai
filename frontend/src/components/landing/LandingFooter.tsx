@@ -8,7 +8,7 @@ import { Heart, Sparkles, Mail } from 'lucide-react';
 export function LandingFooter() {
   return (
     <footer className="border-t border-border bg-card/60 backdrop-blur-sm text-foreground">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 lg:py-16">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-12">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-10 lg:gap-12">
           {/* Brand Info */}
           <div className="md:col-span-5 space-y-4">
@@ -110,7 +110,7 @@ export function LandingFooter() {
         </div>
 
         {/* Bottom Copyright Strip */}
-        <div className="mt-12 pt-8 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-muted-foreground">
+        <div className="mt-8 pt-6 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-muted-foreground">
           <div>
             © {new Date().getFullYear()} Aral.ai. All rights reserved.
           </div>

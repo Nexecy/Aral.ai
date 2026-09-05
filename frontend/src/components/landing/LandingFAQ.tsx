@@ -45,10 +45,10 @@ export function LandingFAQ() {
   ];
 
   return (
-    <section id="faq" className="py-20 lg:py-28 relative">
+    <section id="faq" className="py-12 lg:py-16 relative">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
-        <div className="text-center space-y-4 mb-14">
+        <div className="text-center space-y-3 mb-9">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 text-xs font-bold uppercase tracking-wider">
             <HelpCircle className="w-3.5 h-3.5" />
             <span>Got Questions?</span>
@@ -99,7 +99,7 @@ export function LandingFAQ() {
         </div>
 
         {/* Still have questions? */}
-        <div className="mt-12 text-center text-xs text-muted-foreground">
+        <div className="mt-8 text-center text-xs text-muted-foreground">
           Still have a question?{' '}
           <a href="#contact" className="font-bold text-primary hover:underline">
             Reach out to our team

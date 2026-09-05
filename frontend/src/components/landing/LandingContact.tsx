@@ -24,9 +24,9 @@ export function LandingContact() {
   };
 
   return (
-    <section id="contact" className="py-20 lg:py-28 bg-surface-container-low/40 border-t border-border/60 relative">
+    <section id="contact" className="py-12 lg:py-16 bg-gradient-to-b from-surface-container-low/20 via-surface-container-low/40 to-surface-container-low/20 border-t border-border/50 relative">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="max-w-3xl mx-auto text-center space-y-4 mb-14">
+        <div className="max-w-3xl mx-auto text-center space-y-3 mb-9">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 text-xs font-bold uppercase tracking-wider">
             <Mail className="w-3.5 h-3.5" />
             <span>Connect with Us</span>

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/context/ThemeContext';
 import { AuthScreen } from '@/components/auth/AuthScreen';
 import { signInWithSocialPopup } from '@/lib/socialAuth';
 import { initGoogleIdentity } from '@/lib/googleAuth';
@@ -20,6 +21,7 @@ function isValidEmail(value: string): boolean {
 export function AuthForm({ mode }: AuthFormProps) {
   const router = useRouter();
   const { login, signup, establishSession, refreshUser } = useAuth();
+  const { theme } = useTheme();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -57,7 +59,7 @@ export function AuthForm({ mode }: AuthFormProps) {
           googleBtnRef.current.innerHTML = '';
           window.google.accounts.id.renderButton(googleBtnRef.current, {
             type: 'standard',
-            theme: 'outline',
+            theme: theme === 'dark' ? 'filled_black' : 'outline',
             size: 'large',
             text: 'signin',
             shape: 'rectangular',
@@ -95,7 +97,7 @@ export function AuthForm({ mode }: AuthFormProps) {
       window.removeEventListener('mouseup', handleBlurIframe);
       window.removeEventListener('touchend', handleBlurIframe);
     };
-  }, []);
+  }, [theme]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

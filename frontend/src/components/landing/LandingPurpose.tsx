@@ -32,10 +32,10 @@ export function LandingPurpose() {
   ];
 
   return (
-    <section id="purpose" className="py-20 lg:py-28 bg-surface-container-low/40 border-y border-border/60 relative">
+    <section id="purpose" className="py-12 lg:py-16 bg-gradient-to-b from-surface-container-low/20 via-surface-container-low/40 to-surface-container-low/20 border-y border-border/50 relative">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
-        <div className="max-w-3xl mx-auto text-center space-y-4">
+        <div className="max-w-3xl mx-auto text-center space-y-3">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 text-xs font-bold uppercase tracking-wider">
             <Sparkles className="w-3.5 h-3.5" />
             <span>Our Purpose & Philosophy</span>
@@ -49,34 +49,34 @@ export function LandingPurpose() {
         </div>
 
         {/* 3 Pillars Grid */}
-        <div className="mt-14 grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="mt-9 grid grid-cols-1 md:grid-cols-3 gap-6">
           {pillars.map((pillar, idx) => {
             const Icon = pillar.icon;
             return (
               <div
                 key={idx}
-                className="relative rounded-2xl p-7 sm:p-8 bg-card border border-border hover:border-primary/40 transition-all duration-200 shadow-notion-soft hover:shadow-md space-y-5 flex flex-col justify-between"
+                className="relative rounded-2xl p-6 sm:p-7 bg-card border border-border hover:border-primary/40 transition-all duration-200 shadow-notion-soft hover:shadow-md space-y-4 flex flex-col justify-between"
               >
-                <div className="space-y-4">
+                <div className="space-y-3.5">
                   <div className="flex items-center justify-between">
-                    <div className="w-12 h-12 rounded-xl bg-surface-container flex items-center justify-center text-primary">
-                      <Icon className="w-6 h-6" />
+                    <div className="w-11 h-11 rounded-xl bg-surface-container flex items-center justify-center text-primary">
+                      <Icon className="w-5 h-5" />
                     </div>
                     <span className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-full border ${pillar.badgeColor}`}>
                       {pillar.tag}
                     </span>
                   </div>
 
-                  <h3 className="text-lg font-bold text-foreground leading-snug">
+                  <h3 className="text-base sm:text-lg font-bold text-foreground leading-snug">
                     {pillar.title}
                   </h3>
 
-                  <p className="text-sm text-muted-foreground leading-relaxed">
+                  <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
                     {pillar.description}
                   </p>
                 </div>
 
-                <div className="pt-4 border-t border-border/60 flex items-center gap-2 text-xs font-mono text-muted-foreground">
+                <div className="pt-3.5 border-t border-border/60 flex items-center gap-2 text-xs font-mono text-muted-foreground">
                   <TrendingUp className="w-3.5 h-3.5 text-primary" />
                   <span>Engineered for lifelong mastery</span>
                 </div>
@@ -86,7 +86,7 @@ export function LandingPurpose() {
         </div>
 
         {/* Comparison Strip */}
-        <div className="mt-14 max-w-4xl mx-auto p-6 sm:p-8 rounded-2xl bg-card border border-border shadow-xs">
+        <div className="mt-9 max-w-4xl mx-auto p-6 sm:p-7 rounded-2xl bg-card border border-border shadow-xs">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-10">
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-xs font-bold text-red-500 uppercase tracking-wider">
