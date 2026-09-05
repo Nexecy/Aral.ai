@@ -16,6 +16,8 @@ import { BrandLogo } from '@/components/brand/BrandLogo';
 import { DashboardSummary, Document, Exam, Session } from '@/lib/types';
 import { api } from '@/lib/api';
 import { examColor, formatCountdown, formatExamDate } from '@/lib/examColors';
+import { useAuth } from '@/context/AuthContext';
+import { LandingPage } from '@/components/landing/LandingPage';
 
 function StatColumn({ label, value }: { label: string; value: string }) {
   return (
@@ -26,7 +28,7 @@ function StatColumn({ label, value }: { label: string; value: string }) {
   );
 }
 
-export default function DashboardPage() {
+function DashboardPage() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
@@ -327,3 +329,31 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+export default function Page() {
+  const { user, loading } = useAuth();
+
+  // If visitor is definitely not logged in, render the Landing Homepage
+  if (!user && !loading) {
+    return <LandingPage />;
+  }
+
+  // If no auth token is stored in localStorage, render LandingPage immediately on client
+  if (!user && typeof window !== 'undefined' && !localStorage.getItem('aral_auth_token')) {
+    return <LandingPage />;
+  }
+
+  // If logged in, render the authenticated Study Dashboard
+  if (user) {
+    return <DashboardPage />;
+  }
+
+  // Otherwise during initial auth verification for existing users, show gentle loader
+  return (
+    <div className="py-24 flex flex-col items-center justify-center gap-3">
+      <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      <p className="text-sm font-semibold text-muted-foreground">Loading your study dashboard…</p>
+    </div>
+  );
+}
+

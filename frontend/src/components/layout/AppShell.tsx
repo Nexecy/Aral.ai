@@ -63,12 +63,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { shortcuts } = useShortcutMap();
   const isAuthPage = AUTH_LAYOUT_PATHS.includes(pathname);
   const isGuestOnly = GUEST_ONLY_PATHS.includes(pathname);
+  const isLandingPage = (pathname === '/' || pathname === '') && !user;
 
   useEffect(() => {
     if (loading) return;
-    if (!user && !isAuthPage) router.replace('/login/');
+    if (!user && !isAuthPage && !isLandingPage) router.replace('/login/');
     if (user && isGuestOnly) router.replace('/');
-  }, [loading, user, isAuthPage, isGuestOnly, router]);
+  }, [loading, user, isAuthPage, isGuestOnly, isLandingPage, router]);
 
   useHotkeys([
     {
@@ -90,7 +91,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
   ]);
 
-  if (isAuthPage) {
+  if (isAuthPage || isLandingPage) {
     return <>{children}</>;
   }
 
