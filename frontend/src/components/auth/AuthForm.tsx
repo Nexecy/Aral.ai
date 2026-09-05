@@ -1,13 +1,12 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { AuthScreen } from '@/components/auth/AuthScreen';
 import { signInWithSocial } from '@/lib/socialAuth';
-import { initGoogleIdentity } from '@/lib/googleAuth';
 
 interface AuthFormProps {
   mode: 'login' | 'signup';
@@ -19,7 +18,7 @@ function isValidEmail(value: string): boolean {
 
 export function AuthForm({ mode }: AuthFormProps) {
   const router = useRouter();
-  const { login, signup, establishSession } = useAuth();
+  const { login, signup } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -29,55 +28,6 @@ export function AuthForm({ mode }: AuthFormProps) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isSignup = mode === 'signup';
-  const googleBtnRef = useRef<HTMLDivElement>(null);
-  const [googleReady, setGoogleReady] = useState(false);
-
-  const handleGoogleSuccess = async (accessToken: string) => {
-    try {
-      await establishSession(accessToken);
-      router.replace('/');
-    } catch (err: any) {
-      setError(err?.message || 'Failed to complete Google sign-in.');
-    }
-  };
-
-  const handleGoogleError = (errMsg: string) => {
-    console.info('Google notice:', errMsg);
-  };
-
-  useEffect(() => {
-    let rendered = false;
-    const setupGoogle = () => {
-      if (typeof window !== 'undefined' && window.google?.accounts?.id) {
-        initGoogleIdentity(handleGoogleSuccess, handleGoogleError);
-        if (googleBtnRef.current && !rendered) {
-          try {
-            window.google.accounts.id.renderButton(googleBtnRef.current, {
-              type: 'standard',
-              theme: 'outline',
-              size: 'large',
-              text: 'signin',
-              shape: 'rectangular',
-              logo_alignment: 'left',
-              width: 175
-            });
-            rendered = true;
-            setGoogleReady(true);
-          } catch {
-            // fallback
-          }
-        }
-      }
-    };
-
-    setupGoogle();
-    const interval = setInterval(setupGoogle, 300);
-    return () => clearInterval(interval);
-  }, []);
-
-  const handleGoogleClick = () => {
-    signInWithSocial('google');
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -251,35 +201,25 @@ export function AuthForm({ mode }: AuthFormProps) {
         </div>
 
         {/* Social Auth Buttons */}
-        <div className="grid grid-cols-2 gap-3 pt-1 items-center">
-          <div className="w-full h-[40px] flex items-center justify-center">
-            <div
-              ref={googleBtnRef}
-              className={`w-full h-[40px] flex items-center justify-center ${
-                googleReady ? 'block' : 'hidden'
-              }`}
-            />
-            {!googleReady && (
-              <button
-                type="button"
-                onClick={handleGoogleClick}
-                className="w-full h-[40px] flex items-center justify-center gap-2.5 px-4 rounded-[4px] border border-[#dadce0] dark:border-border bg-white dark:bg-card hover:bg-[#f8f9fa] dark:hover:bg-muted text-xs sm:text-sm font-medium text-[#3c4043] dark:text-foreground transition-all shadow-none"
-                title="Sign in with Google"
-              >
-                <GoogleIcon className="w-4 h-4 shrink-0" />
-                <span>Sign in</span>
-              </button>
-            )}
-          </div>
+        <div className="grid grid-cols-2 gap-3 pt-1">
+          <button
+            type="button"
+            onClick={() => signInWithSocial('google')}
+            className="flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-xl border border-border bg-surface-container-low hover:bg-surface-container text-xs sm:text-sm font-bold text-foreground transition-all hover:border-primary/40 active:scale-98 shadow-2xs"
+            title="Continue with Google"
+          >
+            <GoogleIcon className="w-4 h-4 shrink-0" />
+            <span>Google</span>
+          </button>
 
           <button
             type="button"
             onClick={() => signInWithSocial('facebook')}
-            className="w-full h-[40px] flex items-center justify-center gap-2.5 px-4 rounded-[4px] border border-[#dadce0] dark:border-border bg-white dark:bg-card hover:bg-[#f8f9fa] dark:hover:bg-muted text-xs sm:text-sm font-medium text-[#3c4043] dark:text-foreground transition-all shadow-none"
-            title="Sign in with Facebook"
+            className="flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-xl border border-border bg-surface-container-low hover:bg-surface-container text-xs sm:text-sm font-bold text-foreground transition-all hover:border-primary/40 active:scale-98 shadow-2xs"
+            title="Continue with Facebook"
           >
             <FacebookIcon className="w-4 h-4 shrink-0" />
-            <span>Sign in</span>
+            <span>Facebook</span>
           </button>
         </div>
 
