@@ -137,20 +137,23 @@ export function LandingFeatures() {
             const Icon = feat.icon;
             return (
               <motion.div key={idx} variants={cardItemVariants} className="h-full">
-                <CardTiltWrapper className="h-full" maxTilt={7} glareOpacity={0.35}>
-                  <div className="group relative rounded-2xl p-6 sm:p-7 bg-card border border-border hover:border-primary/50 transition-all duration-300 shadow-notion-soft hover:shadow-xl flex flex-col justify-between h-full">
+                <CardTiltWrapper className="h-full" maxTilt={14} glareOpacity={0.4}>
+                  <div
+                    style={{ transformStyle: 'preserve-3d' }}
+                    className="group relative rounded-2xl p-6 sm:p-7 bg-card border border-border hover:border-primary/50 transition-all duration-300 shadow-notion-soft hover:shadow-2xl hover:shadow-primary/10 flex flex-col justify-between h-full"
+                  >
                     <div className="space-y-3.5">
                       {/* Icon & Status Pill with 3D depth */}
                       <div
                         className="flex items-center justify-between"
-                        style={{ transform: 'translateZ(26px)', transformStyle: 'preserve-3d' }}
+                        style={{ transform: 'translateZ(36px)', transformStyle: 'preserve-3d' }}
                       >
                         <div className="w-11 h-11 rounded-xl bg-surface-container flex items-center justify-center text-primary group-hover:scale-110 group-hover:rotate-2 group-hover:bg-primary/10 transition-all duration-300 shadow-xs">
                           <Icon className="w-5 h-5 transition-transform duration-300 group-hover:scale-105" />
                         </div>
                         <span
                           className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-full border transition-colors duration-200 ${feat.accent}`}
-                          style={{ transform: 'translateZ(20px)' }}
+                          style={{ transform: 'translateZ(28px)' }}
                         >
                           {feat.badge}
                         </span>
@@ -159,7 +162,7 @@ export function LandingFeatures() {
                       {/* Category & Title */}
                       <div
                         className="space-y-1"
-                        style={{ transform: 'translateZ(18px)' }}
+                        style={{ transform: 'translateZ(24px)' }}
                       >
                         <span className="text-[10px] font-mono uppercase tracking-wider font-bold text-muted-foreground">
                           {feat.category}
@@ -172,7 +175,7 @@ export function LandingFeatures() {
                       {/* Description */}
                       <p
                         className="text-xs sm:text-sm text-muted-foreground leading-relaxed"
-                        style={{ transform: 'translateZ(12px)' }}
+                        style={{ transform: 'translateZ(16px)' }}
                       >
                         {feat.description}
                       </p>
@@ -181,7 +184,7 @@ export function LandingFeatures() {
                     {/* Action link with hover arrow micro-interaction */}
                     <div
                       className="pt-4 mt-3 border-t border-border/60 flex items-center text-xs font-bold text-primary transition-all duration-200"
-                      style={{ transform: 'translateZ(16px)' }}
+                      style={{ transform: 'translateZ(20px)' }}
                     >
                       <Link
                         href={feat.href}

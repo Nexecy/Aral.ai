@@ -22,8 +22,8 @@ export interface CardTiltWrapperProps extends HTMLMotionProps<'div'> {
 export function CardTiltWrapper({
   children,
   className = '',
-  maxTilt = 8,
-  glareOpacity = 0.45,
+  maxTilt = 14,
+  glareOpacity = 0.4,
   enableGlare = true,
   style,
   onMouseMove,
@@ -31,7 +31,7 @@ export function CardTiltWrapper({
   onMouseLeave,
   ...props
 }: CardTiltWrapperProps) {
-  const cardRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [isHovered, setIsHovered] = useState(false);
   const shouldReduceMotion = useReducedMotion();
 
@@ -43,8 +43,8 @@ export function CardTiltWrapper({
   const glareX = useMotionValue(50);
   const glareY = useMotionValue(50);
 
-  // Physical spring physics for buttery tilt responsiveness
-  const springConfig = { stiffness: 280, damping: 22, mass: 0.2 };
+  // Physical spring physics for lively, buttery smooth 3D tilt responsiveness
+  const springConfig = { stiffness: 320, damping: 20, mass: 0.15 };
   const mouseXSpring = useSpring(x, springConfig);
   const mouseYSpring = useSpring(y, springConfig);
 
@@ -53,14 +53,14 @@ export function CardTiltWrapper({
   const rotateX = useTransform(mouseYSpring, [-0.5, 0.5], [effectiveTilt, -effectiveTilt]);
   const rotateY = useTransform(mouseXSpring, [-0.5, 0.5], [-effectiveTilt, effectiveTilt]);
 
-  // Dynamic glare radial gradient moving across card surface
-  const glareBackground = useMotionTemplate`radial-gradient(420px circle at ${glareX}% ${glareY}%, rgba(255, 255, 255, ${glareOpacity}) 0%, rgba(255, 255, 255, 0.08) 40%, transparent 75%)`;
+  // Dynamic glare radial gradient that glides across the card surface
+  const glareBackground = useMotionTemplate`radial-gradient(400px circle at ${glareX}% ${glareY}%, rgba(255, 255, 255, ${glareOpacity}) 0%, rgba(255, 255, 255, 0.08) 35%, transparent 75%)`;
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     onMouseMove?.(e);
-    if (!cardRef.current || shouldReduceMotion) return;
+    if (!containerRef.current || shouldReduceMotion) return;
 
-    const rect = cardRef.current.getBoundingClientRect();
+    const rect = containerRef.current.getBoundingClientRect();
     const width = rect.width;
     const height = rect.height;
 
@@ -92,39 +92,53 @@ export function CardTiltWrapper({
   };
 
   return (
-    <motion.div
-      ref={cardRef}
+    // Outer perspective boundary - MUST have perspective here so the child 3D rotate has real depth foreshortening!
+    <div
+      ref={containerRef}
       onMouseMove={handleMouseMove}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
-      style={{
-        transformStyle: 'preserve-3d',
-        perspective: 1000,
-        rotateX,
-        rotateY,
-        ...style,
-      }}
-      whileHover={shouldReduceMotion ? {} : { y: -4, scale: 1.012 }}
-      transition={{ type: 'spring', stiffness: 350, damping: 25 }}
-      className={`relative overflow-hidden rounded-2xl will-change-transform ${className}`}
-      {...props}
+      style={{ perspective: 1000 }}
+      className={`relative h-full w-full ${className}`}
     >
-      {/* Glare / Glossy light sheen layer */}
-      {enableGlare && (
-        <motion.div
-          className="pointer-events-none absolute inset-0 z-20 rounded-2xl transition-opacity duration-300 dark:mix-blend-overlay"
-          style={{
-            background: glareBackground,
-            opacity: isHovered ? 1 : 0,
-          }}
-        />
-      )}
+      {/* 3D Rotating Canvas - preserve-3d enables children with translateZ to pop forward */}
+      <motion.div
+        style={{
+          transformStyle: 'preserve-3d',
+          rotateX,
+          rotateY,
+          ...style,
+        }}
+        whileHover={shouldReduceMotion ? {} : { scale: 1.025 }}
+        transition={{ type: 'spring', stiffness: 350, damping: 25 }}
+        className="relative h-full w-full rounded-2xl will-change-transform"
+        {...props}
+      >
+        {/* Glossy light sheen overlay (clipped inside its own layer so preserve-3d is NEVER flattened by overflow-hidden) */}
+        {enableGlare && (
+          <div
+            className="pointer-events-none absolute inset-0 z-20 rounded-2xl overflow-hidden transition-opacity duration-300"
+            style={{
+              opacity: isHovered ? 1 : 0,
+              transform: 'translateZ(1px)',
+            }}
+          >
+            <motion.div
+              className="w-full h-full"
+              style={{ background: glareBackground }}
+            />
+          </div>
+        )}
 
-      {/* Card Content with 3D depth context */}
-      <div className="relative z-10 h-full w-full" style={{ transformStyle: 'preserve-3d' }}>
-        {children}
-      </div>
-    </motion.div>
+        {/* Card Content with 3D depth context */}
+        <div
+          className="relative z-10 h-full w-full"
+          style={{ transformStyle: 'preserve-3d' }}
+        >
+          {children}
+        </div>
+      </motion.div>
+    </div>
   );
 }
 
