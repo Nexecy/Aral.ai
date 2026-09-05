@@ -28,6 +28,7 @@ export function AuthForm({ mode }: AuthFormProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [googleLoaded, setGoogleLoaded] = useState(false);
   const isSignup = mode === 'signup';
   const googleBtnRef = useRef<HTMLDivElement>(null);
 
@@ -52,7 +53,8 @@ export function AuthForm({ mode }: AuthFormProps) {
       if (typeof window !== 'undefined' && window.google?.accounts?.id && googleBtnRef.current && !rendered) {
         initGoogleIdentity(handleGoogleSuccess, handleGoogleError);
         try {
-          const width = googleBtnRef.current.offsetWidth || 185;
+          const width = googleBtnRef.current.offsetWidth || 190;
+          googleBtnRef.current.innerHTML = '';
           window.google.accounts.id.renderButton(googleBtnRef.current, {
             type: 'standard',
             theme: 'outline',
@@ -63,6 +65,7 @@ export function AuthForm({ mode }: AuthFormProps) {
             width: Math.max(180, Math.min(400, width))
           });
           rendered = true;
+          setGoogleLoaded(true);
           if (timer) clearInterval(timer);
         } catch {
           // fallback
@@ -71,9 +74,26 @@ export function AuthForm({ mode }: AuthFormProps) {
     };
 
     setupGoogle();
-    timer = setInterval(setupGoogle, 200);
+    timer = setInterval(setupGoogle, 150);
+
+    // Prevent iframe from staying stuck in light-blue :active/:focus state
+    const handleBlurIframe = () => {
+      if (typeof document !== 'undefined' && document.activeElement instanceof HTMLIFrameElement) {
+        document.activeElement.blur();
+      }
+    };
+
+    window.addEventListener('blur', handleBlurIframe);
+    window.addEventListener('focus', handleBlurIframe);
+    window.addEventListener('mouseup', handleBlurIframe);
+    window.addEventListener('touchend', handleBlurIframe);
+
     return () => {
       if (timer) clearInterval(timer);
+      window.removeEventListener('blur', handleBlurIframe);
+      window.removeEventListener('focus', handleBlurIframe);
+      window.removeEventListener('mouseup', handleBlurIframe);
+      window.removeEventListener('touchend', handleBlurIframe);
     };
   }, []);
 
@@ -249,24 +269,31 @@ export function AuthForm({ mode }: AuthFormProps) {
         </div>
 
         {/* Social Auth Buttons */}
-        <div className="grid grid-cols-2 gap-3 pt-1 items-center">
-          {/* Google Sign-In with Pre-rendered Placeholder that GIS mounts into */}
-          <div
-            ref={googleBtnRef}
-            className="w-full h-[40px] flex items-center justify-center [&_iframe]:!w-full [&_iframe]:!h-[40px]"
-          >
-            <div
-              onClick={() => signInWithSocialPopup('google')}
-              className="relative w-full h-[40px] flex items-center justify-center rounded-[4px] border border-[#dadce0] dark:border-[#5f6368] bg-white dark:bg-[#131314] hover:bg-[#f8f9fa] dark:hover:bg-[#202124] text-[#3c4043] dark:text-[#e8eaed] transition-colors shadow-none cursor-pointer select-none"
-              title="Sign in with Google"
-            >
-              <div className="absolute left-[12px] top-1/2 -translate-y-1/2 w-[18px] h-[18px] flex items-center justify-center">
-                <GoogleIcon className="w-[18px] h-[18px]" />
+        <div className="grid grid-cols-2 gap-3 pt-1 items-stretch">
+          {/* Google Sign-In Container */}
+          <div className="relative w-full h-[40px] rounded-[4px] overflow-hidden">
+            {/* Steady Skeleton Loader while Google Identity Services initializes */}
+            {!googleLoaded && (
+              <div
+                aria-hidden="true"
+                className="absolute inset-0 w-full h-[40px] flex items-center justify-center rounded-[4px] border border-[#dadce0] dark:border-[#5f6368] bg-white dark:bg-[#131314] select-none pointer-events-none animate-pulse"
+              >
+                <div className="absolute left-[12px] top-1/2 -translate-y-1/2 w-[18px] h-[18px] flex items-center justify-center">
+                  <GoogleIcon className="w-[18px] h-[18px]" />
+                </div>
+                <span className="text-[14px] font-medium tracking-[0.25px] text-[#3c4043] dark:text-[#e8eaed]">
+                  Sign in
+                </span>
               </div>
-              <span className="text-[14px] font-medium tracking-[0.25px]">
-                Sign in
-              </span>
-            </div>
+            )}
+
+            {/* Google Identity Services Container */}
+            <div
+              ref={googleBtnRef}
+              className={`w-full h-[40px] flex items-center justify-center transition-opacity duration-150 ${
+                googleLoaded ? 'opacity-100' : 'opacity-0 pointer-events-none'
+              } [&_iframe]:!w-full [&_iframe]:!h-[40px] [&_iframe]:!m-0 [&>div]:!w-full [&>div]:!h-[40px]`}
+            />
           </div>
 
           {/* Facebook Sign-In matching Google design and opening a popup */}
@@ -285,7 +312,7 @@ export function AuthForm({ mode }: AuthFormProps) {
                 }
               );
             }}
-            className="relative w-full h-[40px] flex items-center justify-center rounded-[4px] border border-[#dadce0] dark:border-[#5f6368] bg-white dark:bg-[#131314] hover:bg-[#f8f9fa] dark:hover:bg-[#202124] text-[#3c4043] dark:text-[#e8eaed] transition-colors shadow-none cursor-pointer select-none"
+            className="relative w-full h-[40px] flex items-center justify-center rounded-[4px] border border-[#dadce0] dark:border-[#5f6368] bg-white dark:bg-[#131314] hover:bg-[#f8f9fa] dark:hover:bg-[#202124] active:bg-[#f1f3f4] dark:active:bg-[#2b2d30] text-[#3c4043] dark:text-[#e8eaed] transition-colors shadow-none cursor-pointer select-none"
             title="Sign in with Facebook"
           >
             <div className="absolute left-[12px] top-1/2 -translate-y-1/2 w-[18px] h-[18px] flex items-center justify-center">
