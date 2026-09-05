@@ -137,6 +137,20 @@ const config: Config = {
         "notion-display": "-0.025em",
         "notion-heading": "-0.015em",
       },
+      keyframes: {
+        appear: {
+          "0%": { opacity: "0", transform: "translateY(10px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        "appear-zoom": {
+          "0%": { opacity: "0", transform: "scale(0.95)" },
+          "100%": { opacity: "1", transform: "scale(1)" },
+        },
+      },
+      animation: {
+        appear: "appear 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards",
+        "appear-zoom": "appear-zoom 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards",
+      },
     },
   },
   plugins: [],
