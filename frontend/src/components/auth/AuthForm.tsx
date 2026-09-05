@@ -56,10 +56,10 @@ export function AuthForm({ mode }: AuthFormProps) {
               type: 'standard',
               theme: 'outline',
               size: 'large',
-              text: 'continue_with',
+              text: 'signin',
               shape: 'rectangular',
               logo_alignment: 'left',
-              width: 185
+              width: 175
             });
             rendered = true;
             setGoogleReady(true);
@@ -263,11 +263,11 @@ export function AuthForm({ mode }: AuthFormProps) {
               <button
                 type="button"
                 onClick={handleGoogleClick}
-                className="w-full h-[40px] flex items-center justify-center gap-2.5 px-4 rounded border border-border bg-surface-container-low hover:bg-surface-container text-xs sm:text-sm font-medium text-foreground transition-all"
-                title="Continue with Google"
+                className="w-full h-[40px] flex items-center justify-center gap-2.5 px-4 rounded-[4px] border border-[#dadce0] dark:border-border bg-white dark:bg-card hover:bg-[#f8f9fa] dark:hover:bg-muted text-xs sm:text-sm font-medium text-[#3c4043] dark:text-foreground transition-all shadow-none"
+                title="Sign in with Google"
               >
                 <GoogleIcon className="w-4 h-4 shrink-0" />
-                <span>Google</span>
+                <span>Sign in</span>
               </button>
             )}
           </div>
@@ -275,11 +275,11 @@ export function AuthForm({ mode }: AuthFormProps) {
           <button
             type="button"
             onClick={() => signInWithSocial('facebook')}
-            className="flex items-center justify-center gap-2.5 px-4 rounded border border-border bg-surface-container-low hover:bg-surface-container text-xs sm:text-sm font-medium text-foreground transition-all shadow-2xs h-[40px]"
-            title="Continue with Facebook"
+            className="w-full h-[40px] flex items-center justify-center gap-2.5 px-4 rounded-[4px] border border-[#dadce0] dark:border-border bg-white dark:bg-card hover:bg-[#f8f9fa] dark:hover:bg-muted text-xs sm:text-sm font-medium text-[#3c4043] dark:text-foreground transition-all shadow-none"
+            title="Sign in with Facebook"
           >
             <FacebookIcon className="w-4 h-4 shrink-0" />
-            <span>Facebook</span>
+            <span>Sign in</span>
           </button>
         </div>
 
