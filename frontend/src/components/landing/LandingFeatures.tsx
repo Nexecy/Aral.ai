@@ -130,17 +130,17 @@ export function LandingFeatures() {
           variants={containerVariants}
           initial="hidden"
           whileInView="visible"
-          viewport={{ once: true, amount: 0.15 }}
+          viewport={{ once: true, amount: 0.1 }}
           className="mt-9 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6"
         >
           {features.map((feat, idx) => {
             const Icon = feat.icon;
             return (
               <motion.div key={idx} variants={cardItemVariants} className="h-full">
-                <CardTiltWrapper className="h-full" maxTilt={14} glareOpacity={0.4}>
+                <CardTiltWrapper className="h-full" maxTilt={16} glareOpacity={0.38}>
                   <div
                     style={{ transformStyle: 'preserve-3d' }}
-                    className="group relative rounded-2xl p-6 sm:p-7 bg-card border border-border hover:border-primary/50 transition-all duration-300 shadow-notion-soft hover:shadow-2xl hover:shadow-primary/10 flex flex-col justify-between h-full"
+                    className="group relative rounded-2xl p-6 sm:p-7 bg-card border border-border hover:border-primary/60 transition-colors duration-200 shadow-notion-soft hover:shadow-2xl hover:shadow-primary/10 flex flex-col justify-between h-full cursor-pointer"
                   >
                     <div className="space-y-3.5">
                       {/* Icon & Status Pill with 3D depth */}
@@ -191,7 +191,7 @@ export function LandingFeatures() {
                         className="inline-flex items-center group/link text-primary hover:opacity-90"
                       >
                         <span>Explore in workspace</span>
-                        <ArrowRight className="w-3.5 h-3.5 ml-1.5 transition-transform duration-200 group-hover:translate-x-1.5" />
+                        <ArrowRight className="w-3.5 h-3.5 ml-1.5 transition-transform duration-300 group-hover:translate-x-2" />
                       </Link>
                     </div>
                   </div>
