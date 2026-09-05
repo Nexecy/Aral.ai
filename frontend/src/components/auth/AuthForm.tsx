@@ -28,68 +28,36 @@ export function AuthForm({ mode }: AuthFormProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [googleLoading, setGoogleLoading] = useState(false);
-  const googleBtnRef = useRef<HTMLDivElement>(null);
-
   const isSignup = mode === 'signup';
 
   const handleGoogleSuccess = async (accessToken: string) => {
-    setGoogleLoading(true);
     try {
       await establishSession(accessToken);
       router.replace('/');
     } catch (err: any) {
       setError(err?.message || 'Failed to complete Google sign-in.');
-    } finally {
-      setGoogleLoading(false);
     }
   };
 
   const handleGoogleError = (errMsg: string) => {
-    setError(errMsg);
-    setGoogleLoading(false);
+    console.info('Google One Tap notice:', errMsg);
   };
 
   useEffect(() => {
-    let rendered = false;
     const setupGoogle = () => {
       if (typeof window !== 'undefined' && window.google?.accounts?.id) {
         initGoogleIdentity(handleGoogleSuccess, handleGoogleError);
-        if (googleBtnRef.current && !rendered) {
-          try {
-            window.google.accounts.id.renderButton(googleBtnRef.current, {
-              type: 'standard',
-              theme: 'outline',
-              size: 'large',
-              text: 'continue_with',
-              shape: 'rectangular',
-              width: 250
-            });
-            rendered = true;
-          } catch {
-            // fallback
-          }
-        }
+        window.google.accounts.id.prompt();
       }
     };
 
-    setupGoogle();
-    const timer = setInterval(setupGoogle, 350);
-    return () => clearInterval(timer);
+    const timer = setTimeout(setupGoogle, 500);
+    return () => clearTimeout(timer);
   }, []);
 
   const handleGoogleClick = () => {
     setError(null);
-    if (typeof window !== 'undefined' && window.google?.accounts?.id) {
-      initGoogleIdentity(handleGoogleSuccess, handleGoogleError);
-      window.google.accounts.id.prompt((notification) => {
-        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-          signInWithSocial('google');
-        }
-      });
-    } else {
-      signInWithSocial('google');
-    }
+    signInWithSocial('google');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -265,26 +233,16 @@ export function AuthForm({ mode }: AuthFormProps) {
 
         {/* Social Auth Buttons */}
         <div className="grid grid-cols-2 gap-3 pt-1">
-          <div className="relative w-full h-[42px] flex items-center justify-center">
-            <button
-              type="button"
-              disabled={googleLoading || submitting}
-              onClick={handleGoogleClick}
-              className="w-full h-full flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-xl border border-border bg-surface-container-low hover:bg-surface-container text-xs sm:text-sm font-bold text-foreground transition-all hover:border-primary/40 active:scale-98 shadow-2xs disabled:opacity-60"
-              title="Continue with Google"
-            >
-              {googleLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin text-primary" />
-              ) : (
-                <GoogleIcon className="w-4 h-4 shrink-0" />
-              )}
-              <span>Google</span>
-            </button>
-            <div
-              ref={googleBtnRef}
-              className="absolute inset-0 opacity-0 cursor-pointer overflow-hidden flex items-center justify-center z-10 [&_iframe]:!w-full [&_iframe]:!h-full [&_iframe]:!scale-150"
-            />
-          </div>
+          <button
+            type="button"
+            disabled={submitting}
+            onClick={handleGoogleClick}
+            className="flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-xl border border-border bg-surface-container-low hover:bg-surface-container text-xs sm:text-sm font-bold text-foreground transition-all hover:border-primary/40 active:scale-98 shadow-2xs h-[42px]"
+            title="Continue with Google"
+          >
+            <GoogleIcon className="w-4 h-4 shrink-0" />
+            <span>Google</span>
+          </button>
 
           <button
             type="button"
