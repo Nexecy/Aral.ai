@@ -32,11 +32,24 @@ export default function ConfirmEmailPage() {
   useEffect(() => {
     const params = readAuthRedirect();
     if (params.error || params.errorDescription) {
+      const desc = params.errorDescription
+        ? decodeURIComponent(params.errorDescription.replace(/\+/g, ' '))
+        : null;
       setOauthError({
         code: params.error,
-        description: params.errorDescription ? decodeURIComponent(params.errorDescription.replace(/\+/g, ' ')) : null
+        description: desc
       });
       clearAuthRedirectFromUrl();
+
+      if (typeof window !== 'undefined' && window.opener) {
+        window.opener.postMessage(
+          { type: 'ARAL_OAUTH_ERROR', error: desc || params.error },
+          window.location.origin
+        );
+        setTimeout(() => {
+          try { window.close(); } catch {}
+        }, 400);
+      }
     }
   }, []);
 
@@ -44,6 +57,16 @@ export default function ConfirmEmailPage() {
 
   useEffect(() => {
     if (verified && user && !oauthError) {
+      if (typeof window !== 'undefined' && window.opener) {
+        window.opener.postMessage(
+          { type: 'ARAL_OAUTH_SUCCESS' },
+          window.location.origin
+        );
+        setTimeout(() => {
+          try { window.close(); } catch {}
+        }, 300);
+        return;
+      }
       const timer = setTimeout(() => {
         router.replace('/');
       }, 1200);

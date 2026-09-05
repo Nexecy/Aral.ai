@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { AuthScreen } from '@/components/auth/AuthScreen';
-import { signInWithSocial } from '@/lib/socialAuth';
+import { signInWithSocial, signInWithSocialPopup } from '@/lib/socialAuth';
+import { initGoogleIdentity } from '@/lib/googleAuth';
 
 interface AuthFormProps {
   mode: 'login' | 'signup';
@@ -18,7 +19,7 @@ function isValidEmail(value: string): boolean {
 
 export function AuthForm({ mode }: AuthFormProps) {
   const router = useRouter();
-  const { login, signup } = useAuth();
+  const { login, signup, establishSession, refreshUser } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -28,6 +29,50 @@ export function AuthForm({ mode }: AuthFormProps) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isSignup = mode === 'signup';
+  const googleBtnRef = useRef<HTMLDivElement>(null);
+  const [googleReady, setGoogleReady] = useState(false);
+
+  const handleGoogleSuccess = async (accessToken: string) => {
+    try {
+      await establishSession(accessToken);
+      router.replace('/');
+    } catch (err: any) {
+      setError(err?.message || 'Failed to complete Google sign-in.');
+    }
+  };
+
+  const handleGoogleError = (errMsg: string) => {
+    console.info('Google notice:', errMsg);
+  };
+
+  useEffect(() => {
+    let rendered = false;
+    const setupGoogle = () => {
+      if (typeof window !== 'undefined' && window.google?.accounts?.id && googleBtnRef.current && !rendered) {
+        initGoogleIdentity(handleGoogleSuccess, handleGoogleError);
+        try {
+          const width = googleBtnRef.current.offsetWidth || 180;
+          window.google.accounts.id.renderButton(googleBtnRef.current, {
+            type: 'standard',
+            theme: 'outline',
+            size: 'large',
+            text: 'signin',
+            shape: 'rectangular',
+            logo_alignment: 'left',
+            width: Math.max(180, Math.min(400, width))
+          });
+          rendered = true;
+          setGoogleReady(true);
+        } catch {
+          // fallback
+        }
+      }
+    };
+
+    setupGoogle();
+    const interval = setInterval(setupGoogle, 250);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -202,24 +247,58 @@ export function AuthForm({ mode }: AuthFormProps) {
 
         {/* Social Auth Buttons */}
         <div className="grid grid-cols-2 gap-3 pt-1">
-          <button
-            type="button"
-            onClick={() => signInWithSocial('google')}
-            className="flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-xl border border-border bg-surface-container-low hover:bg-surface-container text-xs sm:text-sm font-bold text-foreground transition-all hover:border-primary/40 active:scale-98 shadow-2xs"
-            title="Continue with Google"
+          {/* Google Sign-In with Pre-aligned Zero-Flicker Skeleton */}
+          <div
+            onClick={() => {
+              if (!googleReady) {
+                signInWithSocial('google');
+              }
+            }}
+            className="relative w-full h-[40px] flex items-center justify-center rounded-[4px] border border-[#dadce0] dark:border-[#5f6368] bg-white dark:bg-[#131314] overflow-hidden select-none cursor-pointer"
+            title="Sign in with Google"
           >
-            <GoogleIcon className="w-4 h-4 shrink-0" />
-            <span>Google</span>
-          </button>
+            {/* Pre-rendered layout: identical logo position & text to prevent any flicker */}
+            <div className="absolute inset-0 w-full h-full flex items-center justify-center pointer-events-none select-none">
+              <div className="absolute left-[12px] top-1/2 -translate-y-1/2 w-[18px] h-[18px] flex items-center justify-center">
+                <GoogleIcon className="w-[18px] h-[18px]" />
+              </div>
+              <span className="text-[14px] font-medium tracking-[0.25px] text-[#3c4043] dark:text-[#e8eaed]">
+                Sign in
+              </span>
+            </div>
 
+            {/* Real Google Identity iframe mounts smoothly in-place */}
+            <div
+              ref={googleBtnRef}
+              className="relative z-10 w-full h-[40px] flex items-center justify-center [&_iframe]:!w-full [&_iframe]:!h-[40px]"
+            />
+          </div>
+
+          {/* Facebook Sign-In matching Google's design and opening a popup */}
           <button
             type="button"
-            onClick={() => signInWithSocial('facebook')}
-            className="flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-xl border border-border bg-surface-container-low hover:bg-surface-container text-xs sm:text-sm font-bold text-foreground transition-all hover:border-primary/40 active:scale-98 shadow-2xs"
-            title="Continue with Facebook"
+            onClick={() => {
+              setError(null);
+              signInWithSocialPopup(
+                'facebook',
+                async () => {
+                  await refreshUser();
+                  router.replace('/');
+                },
+                (err) => {
+                  setError(err);
+                }
+              );
+            }}
+            className="relative w-full h-[40px] flex items-center justify-center rounded-[4px] border border-[#dadce0] dark:border-[#5f6368] bg-white dark:bg-[#131314] hover:bg-[#f8f9fa] dark:hover:bg-[#202124] text-[#3c4043] dark:text-[#e8eaed] transition-colors shadow-none cursor-pointer select-none"
+            title="Sign in with Facebook"
           >
-            <FacebookIcon className="w-4 h-4 shrink-0" />
-            <span>Facebook</span>
+            <div className="absolute left-[12px] top-1/2 -translate-y-1/2 w-[18px] h-[18px] flex items-center justify-center">
+              <FacebookIcon className="w-[18px] h-[18px]" />
+            </div>
+            <span className="text-[14px] font-medium tracking-[0.25px]">
+              Sign in
+            </span>
           </button>
         </div>
 
@@ -234,7 +313,7 @@ export function AuthForm({ mode }: AuthFormProps) {
   );
 }
 
-function GoogleIcon({ className = 'w-4 h-4' }: { className?: string }) {
+function GoogleIcon({ className = 'w-[18px] h-[18px]' }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24">
       <path
@@ -257,12 +336,16 @@ function GoogleIcon({ className = 'w-4 h-4' }: { className?: string }) {
   );
 }
 
-function FacebookIcon({ className = 'w-4 h-4' }: { className?: string }) {
+function FacebookIcon({ className = 'w-[18px] h-[18px]' }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+    <svg className={className} viewBox="0 0 24 24">
       <path
         fill="#1877F2"
-        d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"
+        d="M24 12a12 12 0 1 0-13.875 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385A12.001 12.001 0 0 0 24 12z"
+      />
+      <path
+        fill="#FFFFFF"
+        d="M16.828 14.531l.532-3.47h-3.328v-2.25c0-.949.465-1.874 1.956-1.874H17.33V3.984s-1.374-.235-2.686-.235c-2.741 0-4.533 1.662-4.533 4.669v2.569H7.078v3.47h3.047v8.385a12.09 12.09 0 0 0 3.875 0v-8.385h2.828z"
       />
     </svg>
   );
