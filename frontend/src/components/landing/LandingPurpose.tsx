@@ -2,30 +2,6 @@
 
 import React from 'react';
 import { Brain, Zap, Target, BookOpenCheck, ShieldAlert, Sparkles, TrendingUp } from 'lucide-react';
-import { motion, Variants } from 'framer-motion';
-
-const purposeContainerVariants: Variants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.07,
-      delayChildren: 0.05,
-    },
-  },
-};
-
-const purposeItemVariants: Variants = {
-  hidden: { opacity: 0, y: 16 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: {
-      duration: 0.45,
-      ease: [0.22, 1, 0.36, 1],
-    },
-  },
-};
 
 export function LandingPurpose() {
   const pillars = [
@@ -73,19 +49,12 @@ export function LandingPurpose() {
         </div>
 
         {/* 3 Pillars Grid */}
-        <motion.div
-          variants={purposeContainerVariants}
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: '-50px' }}
-          className="mt-9 grid grid-cols-1 md:grid-cols-3 gap-6"
-        >
+        <div className="mt-9 grid grid-cols-1 md:grid-cols-3 gap-6">
           {pillars.map((pillar, idx) => {
             const Icon = pillar.icon;
             return (
-              <motion.div
+              <div
                 key={idx}
-                variants={purposeItemVariants}
                 className="relative rounded-2xl p-6 sm:p-7 bg-card border border-border hover:border-primary/40 transition-all duration-200 shadow-notion-soft hover:shadow-md space-y-4 flex flex-col justify-between"
               >
                 <div className="space-y-3.5">
@@ -111,10 +80,10 @@ export function LandingPurpose() {
                   <TrendingUp className="w-3.5 h-3.5 text-primary" />
                   <span>Engineered for lifelong mastery</span>
                 </div>
-              </motion.div>
+              </div>
             );
           })}
-        </motion.div>
+        </div>
 
         {/* Comparison Strip */}
         <div className="mt-9 max-w-4xl mx-auto p-6 sm:p-7 rounded-2xl bg-card border border-border shadow-xs">

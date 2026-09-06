@@ -1,10 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useTheme } from 'next-themes';
-import { motion, useMotionValue, useSpring, useTransform, useReducedMotion } from 'framer-motion';
 import {
   ArrowRight,
   Sparkles,
@@ -35,174 +34,10 @@ export interface HeroSectionProps {
   className?: string;
 }
 
-function SimulatedTokenStreamingText({ text }: { text: string }) {
-  const [displayedText, setDisplayedText] = useState('');
-  const [isComplete, setIsComplete] = useState(false);
-  const [cursorVisible, setCursorVisible] = useState(true);
-  const prefersReducedMotion = useReducedMotion();
-
-  useEffect(() => {
-    if (prefersReducedMotion) {
-      setDisplayedText(text);
-      setIsComplete(true);
-      setCursorVisible(false);
-      return;
-    }
-
-    let charIndex = 0;
-    const interval = setInterval(() => {
-      charIndex += 2;
-      if (charIndex >= text.length) {
-        setDisplayedText(text);
-        setIsComplete(true);
-        clearInterval(interval);
-        const timer = setTimeout(() => {
-          setCursorVisible(false);
-        }, 1200);
-        return () => clearTimeout(timer);
-      } else {
-        setDisplayedText(text.slice(0, charIndex));
-      }
-    }, 28);
-
-    return () => clearInterval(interval);
-  }, [text, prefersReducedMotion]);
-
-  return (
-    <span>
-      {displayedText}
-      {cursorVisible && (
-        <motion.span
-          animate={{ opacity: isComplete ? [1, 0] : [1, 0.2] }}
-          transition={{
-            repeat: isComplete ? 2 : Infinity,
-            duration: 0.5,
-            ease: 'easeInOut',
-          }}
-          className="inline-block w-1.5 h-3.5 ml-1 bg-primary align-middle rounded-xs"
-        />
-      )}
-    </span>
-  );
-}
-
-function FlashcardInteractive({
-  revealed,
-  setRevealed,
-}: {
-  revealed: boolean;
-  setRevealed: React.Dispatch<React.SetStateAction<boolean>>;
-}) {
-  const prefersReducedMotion = useReducedMotion();
-  const cardRef = useRef<HTMLDivElement>(null);
-
-  const x = useMotionValue(0);
-  const y = useMotionValue(0);
-
-  const springConfig = { stiffness: 280, damping: 24, mass: 0.1 };
-  const smoothX = useSpring(x, springConfig);
-  const smoothY = useSpring(y, springConfig);
-
-  const rotateX = useTransform(smoothY, [-0.5, 0.5], ['6deg', '-6deg']);
-  const rotateY = useTransform(smoothX, [-0.5, 0.5], ['-6deg', '6deg']);
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (prefersReducedMotion || !cardRef.current) return;
-    const rect = cardRef.current.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return;
-    const xPct = (e.clientX - rect.left) / rect.width - 0.5;
-    const yPct = (e.clientY - rect.top) / rect.height - 0.5;
-    x.set(xPct);
-    y.set(yPct);
-  };
-
-  const handleMouseLeave = () => {
-    x.set(0);
-    y.set(0);
-  };
-
-  return (
-    <div
-      ref={cardRef}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-      onClick={() => setRevealed((prev) => !prev)}
-      className="cursor-pointer select-none"
-      style={{ perspective: 1000 }}
-    >
-      <motion.div
-        style={{
-          transformStyle: 'preserve-3d',
-          rotateX: prefersReducedMotion ? 0 : rotateX,
-          rotateY: prefersReducedMotion ? 0 : rotateY,
-        }}
-        whileHover={prefersReducedMotion ? {} : { y: -2 }}
-        transition={{ duration: 0.2 }}
-        className="relative w-full"
-      >
-        <motion.div
-          animate={{ rotateY: revealed ? 180 : 0 }}
-          transition={{
-            duration: prefersReducedMotion ? 0.01 : 0.6,
-            ease: [0.23, 1, 0.32, 1],
-          }}
-          style={{ transformStyle: 'preserve-3d' }}
-          className="relative w-full min-h-[220px]"
-        >
-          {/* Front Face (Question) */}
-          <div
-            style={{
-              backfaceVisibility: 'hidden',
-              WebkitBackfaceVisibility: 'hidden',
-            }}
-            className="p-6 sm:p-8 rounded-2xl bg-surface-container-low border border-border hover:border-primary/40 transition-colors shadow-sm space-y-4 w-full flex flex-col justify-between"
-          >
-            <div className="flex items-start justify-between">
-              <span className="text-xs font-mono font-bold text-primary">QUESTION</span>
-              <span className="text-[11px] text-muted-foreground">Click to flip</span>
-            </div>
-            <p className="text-base sm:text-lg font-bold text-foreground">
-              How does Backpropagation calculate weight gradients in deep layers without exponential computational cost?
-            </p>
-            <div className="pt-3 flex items-center gap-2 text-xs text-primary font-semibold">
-              <span>Flip to check answer & citation</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </div>
-          </div>
-
-          {/* Back Face (Answer & Reasoning) */}
-          <div
-            style={{
-              backfaceVisibility: 'hidden',
-              WebkitBackfaceVisibility: 'hidden',
-              transform: 'rotateY(180deg)',
-            }}
-            className="absolute inset-0 p-6 sm:p-8 rounded-2xl bg-surface-container-low border border-primary/40 shadow-sm space-y-3 w-full flex flex-col justify-between"
-          >
-            <div className="flex items-start justify-between">
-              <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                ANSWER & REASONING
-              </span>
-              <span className="text-[11px] text-muted-foreground">Click to flip back</span>
-            </div>
-            <p className="text-sm text-foreground/90 leading-relaxed">
-              It uses dynamic programming through the chain rule, caching partial derivatives from output layer backwards to avoid redundant recomputations.
-            </p>
-            <div className="text-[11px] font-mono text-muted-foreground pt-1 border-t border-border/80">
-              Citation: Section 4.2, Page 17 (Bishop Pattern Recognition)
-            </div>
-          </div>
-        </motion.div>
-      </motion.div>
-    </div>
-  );
-}
-
 export function StudyWorkspacePreview() {
   const [activeTab, setActiveTab] = useState<'notes' | 'flashcards' | 'quiz'>('flashcards');
   const [revealed, setRevealed] = useState(false);
   const [selectedQuizOption, setSelectedQuizOption] = useState<number | null>(null);
-  const prefersReducedMotion = useReducedMotion();
 
   return (
     <Mockup className="w-full">
@@ -219,29 +54,11 @@ export function StudyWorkspacePreview() {
           </span>
         </div>
 
-        {/* Pomodoro Preview Badge with ambient breathing pulse */}
-        <motion.div
-          animate={
-            prefersReducedMotion
-              ? {}
-              : {
-                  boxShadow: [
-                    '0 0 0 0 rgba(79, 70, 229, 0)',
-                    '0 0 0 4px rgba(79, 70, 229, 0.16)',
-                    '0 0 0 0 rgba(79, 70, 229, 0)',
-                  ],
-                }
-          }
-          transition={{
-            repeat: Infinity,
-            duration: 3,
-            ease: 'easeInOut',
-          }}
-          className="flex items-center gap-2 bg-surface-container px-3 py-1 rounded-full font-mono text-[11px] font-bold text-foreground border border-primary/20"
-        >
+        {/* Pomodoro Preview Badge */}
+        <div className="flex items-center gap-2 bg-surface-container px-3 py-1 rounded-full font-mono text-[11px] font-bold text-foreground">
           <Timer className="w-3.5 h-3.5 text-primary animate-pulse" />
           <span>24:18 — Deep Focus</span>
-        </motion.div>
+        </div>
       </MockupFrame>
 
       {/* Interactive Tab Switcher in Mockup */}
@@ -299,7 +116,37 @@ export function StudyWorkspacePreview() {
                 </span>
               </div>
 
-              <FlashcardInteractive revealed={revealed} setRevealed={setRevealed} />
+              <div
+                onClick={() => setRevealed(!revealed)}
+                className="p-6 sm:p-8 rounded-2xl bg-surface-container-low border border-border hover:border-primary/40 cursor-pointer transition-all shadow-sm space-y-4"
+              >
+                <div className="flex items-start justify-between">
+                  <span className="text-xs font-mono font-bold text-primary">QUESTION</span>
+                  <span className="text-[11px] text-muted-foreground">Click to flip</span>
+                </div>
+                <p className="text-base sm:text-lg font-bold text-foreground">
+                  How does Backpropagation calculate weight gradients in deep layers without exponential computational cost?
+                </p>
+
+                {revealed ? (
+                  <div className="pt-4 border-t border-border/80 space-y-2 animate-in fade-in duration-200">
+                    <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                      ANSWER & REASONING
+                    </span>
+                    <p className="text-sm text-foreground/90 leading-relaxed">
+                      It uses dynamic programming through the chain rule, caching partial derivatives from output layer backwards to avoid redundant recomputations.
+                    </p>
+                    <div className="text-[11px] font-mono text-muted-foreground pt-1">
+                      Citation: Section 4.2, Page 17 (Bishop Pattern Recognition)
+                    </div>
+                  </div>
+                ) : (
+                  <div className="pt-3 flex items-center gap-2 text-xs text-primary font-semibold">
+                    <span>Flip to check answer & citation</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </div>
+                )}
+              </div>
 
               <div className="flex items-center justify-between pt-2">
                 <span className="text-xs text-muted-foreground">Confidence assessment:</span>
@@ -417,7 +264,7 @@ export function StudyWorkspacePreview() {
 
             <div className="p-3.5 rounded-2xl bg-primary/5 border border-primary/20 text-xs space-y-2">
               <p className="text-foreground/90 leading-relaxed">
-                <SimulatedTokenStreamingText text="Batch Norm reduces internal covariate shift by ensuring activations throughout the network have consistent zero-mean and unit variance for each mini-batch." />
+                Batch Norm reduces internal covariate shift by ensuring activations throughout the network have consistent zero-mean and unit variance for each mini-batch.
               </p>
               <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-background border border-border text-[10px] font-mono text-primary font-bold">
                 <span>Source: Lecture 7, Slide 21</span>
@@ -442,18 +289,11 @@ export function StudyWorkspacePreview() {
 
 export function HeroSection({
   badge = (
-    <motion.div
-      whileHover={{ y: -2 }}
-      whileTap={{ scale: 0.98 }}
-      transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-      className="inline-block cursor-default"
-    >
-      <Badge variant="secondary" className="px-3.5 py-1.5 gap-2 backdrop-blur-md shadow-xs">
-        <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-        <Sparkles className="w-3.5 h-3.5 text-primary" />
-        <span>Next-Gen Active Recall & Deep Study Studio</span>
-      </Badge>
-    </motion.div>
+    <Badge variant="secondary" className="px-3.5 py-1.5 gap-2 backdrop-blur-md shadow-xs">
+      <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+      <Sparkles className="w-3.5 h-3.5 text-primary" />
+      <span>Next-Gen Active Recall & Deep Study Studio</span>
+    </Badge>
   ),
   title = (
     <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-foreground tracking-tight leading-[1.12]">
@@ -471,31 +311,17 @@ export function HeroSection({
   ),
   actions = (
     <div className="pt-1 flex flex-col sm:flex-row items-center justify-center gap-3.5">
-      <motion.div
-        whileHover={{ y: -2 }}
-        whileTap={{ scale: 0.98 }}
-        transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-        className="w-full sm:w-auto"
-      >
-        <Button asChild size="lg" className="w-full sm:w-auto gap-2.5">
-          <Link href="/signup/">
-            <span>Start studying for free</span>
-            <ArrowRight className="w-4 h-4" />
-          </Link>
-        </Button>
-      </motion.div>
-      <motion.div
-        whileHover={{ y: -2 }}
-        whileTap={{ scale: 0.98 }}
-        transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-        className="w-full sm:w-auto"
-      >
-        <Button asChild variant="outline" size="lg" className="w-full sm:w-auto gap-2">
-          <a href="#features">
-            <span>See how it works</span>
-          </a>
-        </Button>
-      </motion.div>
+      <Button asChild size="lg" className="w-full sm:w-auto gap-2.5">
+        <Link href="/signup/">
+          <span>Start studying for free</span>
+          <ArrowRight className="w-4 h-4" />
+        </Link>
+      </Button>
+      <Button asChild variant="outline" size="lg" className="w-full sm:w-auto gap-2">
+        <a href="#features">
+          <span>See how it works</span>
+        </a>
+      </Button>
     </div>
   ),
   trustIndicators = (

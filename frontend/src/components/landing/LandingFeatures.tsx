@@ -20,19 +20,19 @@ const containerVariants: Variants = {
   visible: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.07,
+      staggerChildren: 0.09,
       delayChildren: 0.05,
     },
   },
 };
 
 const cardItemVariants: Variants = {
-  hidden: { opacity: 0, y: 16 },
+  hidden: { opacity: 0, y: 30 },
   visible: {
     opacity: 1,
     y: 0,
     transition: {
-      duration: 0.45,
+      duration: 0.55,
       ease: [0.22, 1, 0.36, 1],
     },
   },
@@ -130,7 +130,7 @@ export function LandingFeatures() {
           variants={containerVariants}
           initial="hidden"
           whileInView="visible"
-          viewport={{ once: true, margin: '-50px' }}
+          viewport={{ once: true, amount: 0.1 }}
           className="mt-9 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6"
         >
           {features.map((feat, idx) => {
@@ -216,20 +216,13 @@ export function LandingFeatures() {
             Create an account in 30 seconds and upload your first syllabus, textbook, or lecture deck.
           </p>
           <div className="pt-2">
-            <motion.div
-              whileHover={{ y: -2 }}
-              whileTap={{ scale: 0.98 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-              className="inline-block"
+            <Link
+              href="/signup/"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-primary hover:bg-primary-container text-on-primary text-xs sm:text-sm font-bold shadow-md hover:shadow-lg transition-all"
             >
-              <Link
-                href="/signup/"
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-primary hover:bg-primary-container text-on-primary text-xs sm:text-sm font-bold shadow-md hover:shadow-lg transition-all"
-              >
-                <span>Get started for free</span>
-                <ArrowRight className="w-4 h-4" />
-              </Link>
-            </motion.div>
+              <span>Get started for free</span>
+              <ArrowRight className="w-4 h-4" />
+            </Link>
           </div>
         </motion.div>
       </div>

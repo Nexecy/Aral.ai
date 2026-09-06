@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ChevronDown, HelpCircle } from 'lucide-react';
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { ChevronDown, HelpCircle, Sparkles } from 'lucide-react';
 
 interface FAQItem {
   question: string;
@@ -11,7 +10,6 @@ interface FAQItem {
 
 export function LandingFAQ() {
   const [openIdx, setOpenIdx] = useState<number | null>(0);
-  const prefersReducedMotion = useReducedMotion();
 
   const faqs: FAQItem[] = [
     {
@@ -81,61 +79,20 @@ export function LandingFAQ() {
                   <span className="text-base font-bold text-foreground">
                     {faq.question}
                   </span>
-                  <motion.div
-                    animate={{ rotate: isOpen ? 180 : 0 }}
-                    transition={{
-                      duration: prefersReducedMotion ? 0.01 : 0.28,
-                      ease: [0.22, 1, 0.36, 1],
-                    }}
-                    className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-colors duration-200 ${
-                      isOpen ? 'text-primary bg-primary/10' : 'bg-surface-container text-muted-foreground'
+                  <div
+                    className={`w-7 h-7 rounded-full bg-surface-container flex items-center justify-center shrink-0 text-muted-foreground transition-transform duration-200 ${
+                      isOpen ? 'rotate-180 text-primary bg-primary/10' : ''
                     }`}
                   >
                     <ChevronDown className="w-4 h-4" />
-                  </motion.div>
+                  </div>
                 </button>
 
-                <AnimatePresence initial={false}>
-                  {isOpen && (
-                    <motion.div
-                      key="content"
-                      initial={
-                        prefersReducedMotion
-                          ? { opacity: 0 }
-                          : { height: 0, opacity: 0 }
-                      }
-                      animate={
-                        prefersReducedMotion
-                          ? { opacity: 1 }
-                          : {
-                              height: 'auto',
-                              opacity: 1,
-                              transition: {
-                                height: { duration: 0.35, ease: [0.22, 1, 0.36, 1] },
-                                opacity: { duration: 0.25, delay: 0.08, ease: 'easeOut' },
-                              },
-                            }
-                      }
-                      exit={
-                        prefersReducedMotion
-                          ? { opacity: 0 }
-                          : {
-                              height: 0,
-                              opacity: 0,
-                              transition: {
-                                height: { duration: 0.28, ease: [0.22, 1, 0.36, 1] },
-                                opacity: { duration: 0.18, ease: 'easeIn' },
-                              },
-                            }
-                      }
-                      className="overflow-hidden"
-                    >
-                      <div className="px-6 pb-6 pt-1 text-sm text-muted-foreground leading-relaxed border-t border-border/50">
-                        <p>{faq.answer}</p>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                {isOpen && (
+                  <div className="px-6 pb-6 pt-1 text-sm text-muted-foreground leading-relaxed border-t border-border/50 animate-in fade-in duration-200">
+                    <p>{faq.answer}</p>
+                  </div>
+                )}
               </div>
             );
           })}
