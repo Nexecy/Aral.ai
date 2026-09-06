@@ -117,36 +117,79 @@ export function StudyWorkspacePreview() {
                 </span>
               </div>
 
+              {/* 3D Flipping Flashcard */}
               <div
                 onClick={() => setRevealed(!revealed)}
-                className="p-6 sm:p-8 rounded-2xl bg-surface-container-low border border-border hover:border-primary/40 cursor-pointer transition-all shadow-sm space-y-4"
+                className="relative cursor-pointer select-none [perspective:1000px] w-full"
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setRevealed(!revealed);
+                  }
+                }}
+                aria-label="Flashcard preview, click to flip between question and answer"
               >
-                <div className="flex items-start justify-between">
-                  <span className="text-xs font-mono font-bold text-primary">QUESTION</span>
-                  <span className="text-[11px] text-muted-foreground">Click to flip</span>
-                </div>
-                <p className="text-base sm:text-lg font-bold text-foreground">
-                  How does Backpropagation calculate weight gradients in deep layers without exponential computational cost?
-                </p>
+                <div
+                  style={{
+                    transform: revealed ? 'rotateY(180deg)' : 'rotateY(0deg)',
+                    transformStyle: 'preserve-3d',
+                  }}
+                  className="relative w-full transition-transform duration-500 ease-out"
+                >
+                  {/* Front Face: Question */}
+                  <div
+                    style={{
+                      backfaceVisibility: 'hidden',
+                      WebkitBackfaceVisibility: 'hidden',
+                    }}
+                    className="p-6 sm:p-8 rounded-2xl bg-surface-container-low border border-border hover:border-primary/40 transition-colors shadow-sm space-y-4 flex flex-col justify-between min-h-[220px]"
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-start justify-between">
+                        <span className="text-xs font-mono font-bold text-primary">QUESTION</span>
+                        <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                          Click to flip
+                        </span>
+                      </div>
+                      <p className="text-base sm:text-lg font-bold text-foreground leading-snug">
+                        How does Backpropagation calculate weight gradients in deep layers without exponential computational cost?
+                      </p>
+                    </div>
 
-                {revealed ? (
-                  <div className="pt-4 border-t border-border/80 space-y-2 animate-in fade-in duration-200">
-                    <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                      ANSWER & REASONING
-                    </span>
-                    <p className="text-sm text-foreground/90 leading-relaxed">
-                      It uses dynamic programming through the chain rule, caching partial derivatives from output layer backwards to avoid redundant recomputations.
-                    </p>
-                    <div className="text-[11px] font-mono text-muted-foreground pt-1">
+                    <div className="pt-3 flex items-center gap-2 text-xs text-primary font-semibold">
+                      <span>Flip to check answer & citation</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </div>
+                  </div>
+
+                  {/* Back Face: Answer & Reasoning */}
+                  <div
+                    style={{
+                      backfaceVisibility: 'hidden',
+                      WebkitBackfaceVisibility: 'hidden',
+                      transform: 'rotateY(180deg)',
+                    }}
+                    className="absolute inset-0 p-6 sm:p-8 rounded-2xl bg-surface-container-low border border-primary/40 shadow-sm space-y-3 flex flex-col justify-between min-h-[220px]"
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-start justify-between">
+                        <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                          ANSWER & REASONING
+                        </span>
+                        <span className="text-[11px] text-muted-foreground">Click to flip back</span>
+                      </div>
+                      <p className="text-xs sm:text-sm text-foreground/90 leading-relaxed">
+                        It uses dynamic programming through the chain rule, caching partial derivatives from output layer backwards to avoid redundant recomputations.
+                      </p>
+                    </div>
+
+                    <div className="text-[11px] font-mono text-muted-foreground pt-2 border-t border-border/70">
                       Citation: Section 4.2, Page 17 (Bishop Pattern Recognition)
                     </div>
                   </div>
-                ) : (
-                  <div className="pt-3 flex items-center gap-2 text-xs text-primary font-semibold">
-                    <span>Flip to check answer & citation</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </div>
-                )}
+                </div>
               </div>
 
               <div className="flex items-center justify-between pt-2">
