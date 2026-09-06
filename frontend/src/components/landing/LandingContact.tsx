@@ -3,6 +3,8 @@
 import React, { useState } from 'react';
 import { Mail, Send, CheckCircle2, Sparkles, HelpCircle, AlertCircle, Loader2 } from 'lucide-react';
 
+import { api } from '@/lib/api';
+
 const WEB3FORMS_ACCESS_KEY =
   process.env.NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY || 'b9829b92-ee07-4020-9a2e-dae85955121f';
 
@@ -17,11 +19,36 @@ export function LandingContact() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!name.trim() || !email.trim() || !message.trim()) return;
+    const cleanName = name.trim();
+    const cleanEmail = email.trim();
+    const cleanMessage = message.trim();
+
+    if (!cleanName || !cleanEmail || !cleanMessage) return;
 
     setSubmitting(true);
     setErrorMessage(null);
 
+    // 1. First Attempt: Backend API (Branded HTML + Student Auto-Responder)
+    try {
+      const result = await api.submitContact({
+        name: cleanName,
+        email: cleanEmail,
+        topic,
+        message: cleanMessage,
+        platform: typeof window !== 'undefined' && (window as any).Capacitor ? 'Mobile App' : 'Web Client',
+      });
+
+      if (result && result.ok) {
+        setSubmitted(true);
+        setMessage('');
+        setSubmitting(false);
+        return;
+      }
+    } catch (backendErr) {
+      console.warn('Backend contact route unreachable, falling back to Web3Forms...', backendErr);
+    }
+
+    // 2. Fallback: Web3Forms direct delivery
     try {
       const response = await fetch('https://api.web3forms.com/submit', {
         method: 'POST',
@@ -31,11 +58,12 @@ export function LandingContact() {
         },
         body: JSON.stringify({
           access_key: WEB3FORMS_ACCESS_KEY,
-          name: name.trim(),
-          email: email.trim(),
-          subject: `[Aral.ai Contact] ${topic}: from ${name.trim()}`,
+          name: cleanName,
+          email: cleanEmail,
+          replyto: cleanEmail,
+          subject: `[Aral.ai Contact] ${topic}: from ${cleanName}`,
           topic,
-          message: message.trim(),
+          message: cleanMessage,
           from_name: 'Aral.ai Contact Form',
           botcheck: '',
         }),

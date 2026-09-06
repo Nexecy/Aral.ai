@@ -15,7 +15,8 @@ from app.routers import (
     quizzes,
     chat,
     pomodoro,
-    exams
+    exams,
+    contact
 )
 
 app = FastAPI(
@@ -67,6 +68,7 @@ app.include_router(quizzes.router, prefix="/api")
 app.include_router(chat.router, prefix="/api")
 app.include_router(pomodoro.router, prefix="/api")
 app.include_router(exams.router, prefix="/api")
+app.include_router(contact.router, prefix="/api")
 
 @app.get("/")
 @app.get("/api/health")

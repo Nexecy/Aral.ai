@@ -17,6 +17,14 @@ class Settings(BaseSettings):
     SUPABASE_KEY: str = Field(default="")
     SUPABASE_JWT_SECRET: str = Field(default="")
     
+    # Email / SMTP
+    SMTP_HOST: str = Field(default="smtp.gmail.com")
+    SMTP_PORT: int = Field(default=587)
+    SMTP_USER: str = Field(default="aral.ai.app@gmail.com")
+    SMTP_PASSWORD: str = Field(default="")
+    SMTP_FROM_NAME: str = Field(default="Aral.ai")
+    SUPPORT_EMAIL: str = Field(default="aral.ai.app@gmail.com")
+
     FRONTEND_URL: str = Field(default="http://localhost:3000")
     # Used when the API is hosted (Render) but FRONTEND_URL was left on localhost.
     PRODUCTION_FRONTEND_URL: str = Field(default="https://aral-ai-three.vercel.app")
@@ -54,6 +62,10 @@ class Settings(BaseSettings):
             and self.SUPABASE_KEY 
             and self.SUPABASE_URL.startswith("http")
         )
+
+    @property
+    def has_smtp_credentials(self) -> bool:
+        return bool(self.SMTP_USER and self.SMTP_PASSWORD and len(self.SMTP_PASSWORD.strip()) > 3)
 
     model_config = SettingsConfigDict(
         env_file=[

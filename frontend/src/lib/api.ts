@@ -652,6 +652,22 @@ class ApiClient {
   async getDashboardSummary(): Promise<DashboardSummary> {
     return this.cachedRequest<DashboardSummary>('/dashboard/summary', 15000);
   }
+
+  // ---------------------------------------------------------------------------
+  // Contact & Inquiries
+  // ---------------------------------------------------------------------------
+  async submitContact(payload: {
+    name: string;
+    email: string;
+    topic: string;
+    message: string;
+    platform?: string;
+  }): Promise<{ ok: boolean; message: string; delivery?: unknown }> {
+    return this.request<{ ok: boolean; message: string; delivery?: unknown }>('/contact', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
 }
 
 export const api = new ApiClient();
