@@ -34,10 +34,58 @@ export interface HeroSectionProps {
   className?: string;
 }
 
+const sampleFlashcards = [
+  {
+    cardNumber: 3,
+    priority: 'High Retention Priority',
+    badge: 'Spaced Recall',
+    question: 'How does Backpropagation calculate weight gradients in deep layers without exponential computational cost?',
+    answer: 'It uses dynamic programming through the chain rule, caching partial derivatives from output layer backwards to avoid redundant recomputations.',
+    citation: 'Citation: Section 4.2, Page 17 (Bishop Pattern Recognition)',
+  },
+  {
+    cardNumber: 4,
+    priority: 'Core Architectural Principle',
+    badge: 'Due Today',
+    question: 'Why does Dropout act as an implicit ensemble technique during neural network training?',
+    answer: 'By randomly zeroing units with probability p during each step, it prevents co-adaptation of features and approximates geometric averaging of 2ⁿ thinned sub-networks.',
+    citation: 'Citation: Section 7.12, Page 258 (Deep Learning Book)',
+  },
+  {
+    cardNumber: 5,
+    priority: 'High Yield Exam Target',
+    badge: 'Spaced Recall',
+    question: 'What fundamental limitation of Recurrent Neural Networks (RNNs) does the Self-Attention mechanism overcome?',
+    answer: 'RNNs suffer from sequential O(n) recurrence preventing parallel computation; self-attention computes O(1) direct paths between any two sequence positions.',
+    citation: 'Citation: Vaswani et al. (2017), Section 2, Page 3',
+  },
+];
+
 export function StudyWorkspacePreview() {
   const [activeTab, setActiveTab] = useState<'notes' | 'flashcards' | 'quiz'>('flashcards');
+  const [cardIndex, setCardIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
+  const [selectedRating, setSelectedRating] = useState<'hard' | 'good' | 'easy' | null>(null);
+  const [scheduledFeedback, setScheduledFeedback] = useState<string | null>(null);
   const [selectedQuizOption, setSelectedQuizOption] = useState<number | null>(null);
+
+  const currentCard = sampleFlashcards[cardIndex];
+
+  const handleRate = (rating: 'hard' | 'good' | 'easy', interval: string) => {
+    setSelectedRating(rating);
+    setRevealed(true);
+    setScheduledFeedback(`Scheduled for review in ${interval}!`);
+
+    // Advance to next card smoothly after 900ms
+    setTimeout(() => {
+      setRevealed(false);
+      setSelectedRating(null);
+      setCardIndex((prev) => (prev + 1) % sampleFlashcards.length);
+      setTimeout(() => {
+        setScheduledFeedback(null);
+      }, 2200);
+    }, 900);
+  };
 
   return (
     <Mockup className="w-full">
@@ -110,10 +158,10 @@ export function StudyWorkspacePreview() {
             <div className="space-y-6">
               <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <span className="font-mono uppercase tracking-wider font-semibold">
-                  Card 3 of 12 • High Retention Priority
+                  Card {currentCard.cardNumber} of 12 • {currentCard.priority}
                 </span>
                 <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold">
-                  Spaced Recall
+                  {currentCard.badge}
                 </span>
               </div>
 
@@ -154,7 +202,7 @@ export function StudyWorkspacePreview() {
                         </span>
                       </div>
                       <p className="text-base sm:text-lg font-bold text-foreground leading-snug">
-                        How does Backpropagation calculate weight gradients in deep layers without exponential computational cost?
+                        {currentCard.question}
                       </p>
                     </div>
 
@@ -181,38 +229,59 @@ export function StudyWorkspacePreview() {
                         <span className="text-[11px] text-muted-foreground">Click to flip back</span>
                       </div>
                       <p className="text-xs sm:text-sm text-foreground/90 leading-relaxed">
-                        It uses dynamic programming through the chain rule, caching partial derivatives from output layer backwards to avoid redundant recomputations.
+                        {currentCard.answer}
                       </p>
                     </div>
 
                     <div className="text-[11px] font-mono text-muted-foreground pt-2 border-t border-border/70">
-                      Citation: Section 4.2, Page 17 (Bishop Pattern Recognition)
+                      {currentCard.citation}
                     </div>
                   </div>
                 </div>
               </div>
 
               <div className="flex items-center justify-between pt-2">
-                <span className="text-xs text-muted-foreground">Confidence assessment:</span>
+                <div className="flex items-center gap-1.5 text-xs min-h-[20px]">
+                  {scheduledFeedback ? (
+                    <span className="font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 animate-in fade-in">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                      {scheduledFeedback}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">Confidence assessment:</span>
+                  )}
+                </div>
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={() => setRevealed(true)}
-                    className="px-3 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-surface-container"
+                    onClick={() => handleRate('hard', '1 day')}
+                    className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+                      selectedRating === 'hard'
+                        ? 'bg-red-500/20 border-red-500 text-red-600 dark:text-red-400 font-bold scale-105'
+                        : 'border-border hover:bg-surface-container text-foreground'
+                    }`}
                   >
                     Hard <span className="font-mono text-[11px] opacity-70">(1d)</span>
                   </button>
                   <button
                     type="button"
-                    onClick={() => setRevealed(true)}
-                    className="px-3 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-surface-container"
+                    onClick={() => handleRate('good', '3 days')}
+                    className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+                      selectedRating === 'good'
+                        ? 'bg-amber-500/20 border-amber-500 text-amber-600 dark:text-amber-400 font-bold scale-105'
+                        : 'border-border hover:bg-surface-container text-foreground'
+                    }`}
                   >
                     Good <span className="font-mono text-[11px] opacity-70">(3d)</span>
                   </button>
                   <button
                     type="button"
-                    onClick={() => setRevealed(true)}
-                    className="px-3 py-1.5 rounded-lg bg-primary/10 text-primary border border-primary/20 text-xs font-bold"
+                    onClick={() => handleRate('easy', '7 days')}
+                    className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+                      selectedRating === 'easy'
+                        ? 'bg-emerald-500/20 border-emerald-500 text-emerald-600 dark:text-emerald-400 font-bold scale-105'
+                        : 'bg-primary/10 text-primary border-primary/20 font-bold hover:bg-primary/15'
+                    }`}
                   >
                     Easy <span className="font-mono text-[11px] opacity-70">(7d)</span>
                   </button>
