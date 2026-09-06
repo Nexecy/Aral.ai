@@ -39,25 +39,25 @@ const sampleFlashcards = [
     cardNumber: 3,
     priority: 'High Retention Priority',
     badge: 'Spaced Recall',
-    question: 'How does Backpropagation calculate weight gradients in deep layers without exponential computational cost?',
-    answer: 'It uses dynamic programming through the chain rule, caching partial derivatives from output layer backwards to avoid redundant recomputations.',
-    citation: 'Citation: Section 4.2, Page 17 (Bishop Pattern Recognition)',
+    question: 'Why does the human brain remember emotional events much more vividly than everyday memories?',
+    answer: 'The amygdala releases stress hormones (adrenaline and cortisol) during emotional arousal, signaling the hippocampus to prioritize and deeply consolidate those memory traces.',
+    citation: 'Citation: Chapter 4, Page 42 (Cognitive Neuroscience & Memory)',
   },
   {
     cardNumber: 4,
-    priority: 'Core Architectural Principle',
+    priority: 'Core Principle',
     badge: 'Due Today',
-    question: 'Why does Dropout act as an implicit ensemble technique during neural network training?',
-    answer: 'By randomly zeroing units with probability p during each step, it prevents co-adaptation of features and approximates geometric averaging of 2ⁿ thinned sub-networks.',
-    citation: 'Citation: Section 7.12, Page 258 (Deep Learning Book)',
+    question: 'Why does the sky appear blue during the day, but turns orange and red at sunset?',
+    answer: 'Rayleigh scattering causes shorter blue wavelengths of sunlight to scatter broadly across the atmosphere. At sunset, light passes through more air, scattering blue out and leaving longer red and orange wavelengths.',
+    citation: 'Citation: Section 2.4, Page 19 (Earth & Atmospheric Science)',
   },
   {
     cardNumber: 5,
-    priority: 'High Yield Exam Target',
+    priority: 'High Yield Target',
     badge: 'Spaced Recall',
-    question: 'What fundamental limitation of Recurrent Neural Networks (RNNs) does the Self-Attention mechanism overcome?',
-    answer: 'RNNs suffer from sequential O(n) recurrence preventing parallel computation; self-attention computes O(1) direct paths between any two sequence positions.',
-    citation: 'Citation: Vaswani et al. (2017), Section 2, Page 3',
+    question: 'How does sleep directly improve memory consolidation after studying?',
+    answer: 'During slow-wave and REM sleep, the brain replays newly learned neural patterns, transferring short-term memory traces from the hippocampus into permanent storage in the neocortex.',
+    citation: 'Citation: Chapter 7, Page 85 (Sleep & Cognitive Function)',
   },
 ];
 
@@ -95,7 +95,7 @@ export function StudyWorkspacePreview() {
             <div className="w-2.5 h-2.5 rounded-full bg-emerald-400/80" />
           </div>
           <span className="hidden sm:inline-block ml-3 font-mono text-[11px] text-muted-foreground">
-            Neural_Networks_Midterm_Review.pdf — 42 pages
+            Human_Biology_&_Cognitive_Science.pdf — 38 pages
           </span>
         </div>
 
@@ -305,15 +305,15 @@ export function StudyWorkspacePreview() {
               </div>
 
               <p className="text-base font-bold text-foreground">
-                Which activation function suffers most severely from the vanishing gradient problem in deep feedforward architectures?
+                Which organ in the human body consumes approximately 20% of resting energy despite accounting for only 2% of total body weight?
               </p>
 
               <div className="space-y-2.5">
                 {[
-                  { id: 0, text: 'ReLU (Rectified Linear Unit)', correct: false },
-                  { id: 1, text: 'Sigmoid function', correct: true },
-                  { id: 2, text: 'Leaky ReLU', correct: false },
-                  { id: 3, text: 'ELU (Exponential Linear Unit)', correct: false }
+                  { id: 0, text: 'Heart', correct: false },
+                  { id: 1, text: 'Brain', correct: true },
+                  { id: 2, text: 'Liver', correct: false },
+                  { id: 3, text: 'Lungs', correct: false }
                 ].map((opt) => (
                   <div
                     key={opt.id}
@@ -338,7 +338,7 @@ export function StudyWorkspacePreview() {
 
               {selectedQuizOption !== null && (
                 <p className="text-xs text-muted-foreground leading-relaxed pt-1 animate-in fade-in">
-                  <strong>Explanation:</strong> Sigmoid squashes inputs into [0, 1] where its derivative approaches 0 for large absolute values, causing gradients to vanish during deep backpropagation.
+                  <strong>Explanation:</strong> The human brain utilizes roughly 20% of resting glucose and oxygen to power continuous synaptic signaling and cellular maintenance across 86 billion neurons.
                 </p>
               )}
             </div>
@@ -350,11 +350,11 @@ export function StudyWorkspacePreview() {
                 <FileText className="w-3.5 h-3.5" />
                 <span>SYNTHESIZED NOTE SUMMARY</span>
               </div>
-              <h3 className="text-base font-bold text-foreground">Key Architecture Takeaways</h3>
+              <h3 className="text-base font-bold text-foreground">Key Cognitive Science Takeaways</h3>
               <ul className="space-y-2 list-disc list-inside text-muted-foreground leading-relaxed">
-                <li><strong className="text-foreground">Vanishing Gradients:</strong> Resolved primarily by residual connections (ResNet) and normalized initializations (He/Xavier).</li>
-                <li><strong className="text-foreground">Attention Mechanism:</strong> Replaces recurrent recurrence with dot-product query-key matching, parallelizing sequence computation.</li>
-                <li><strong className="text-foreground">Exam Watchout:</strong> Professor emphasized Theorem 3.4 on convergence guarantees for final exam.</li>
+                <li><strong className="text-foreground">Active Retrieval:</strong> Self-testing forces the brain to rebuild neural pathways, producing up to 300% greater long-term retention than passive reading.</li>
+                <li><strong className="text-foreground">Spaced Intervals:</strong> Reviewing material right before the forgetting curve threshold resets memory strength and doubles retention duration.</li>
+                <li><strong className="text-foreground">Sleep Consolidation:</strong> 7 to 8 hours of sleep allows the hippocampus to transfer daily facts into permanent neocortical storage.</li>
               </ul>
             </div>
           )}
@@ -378,16 +378,16 @@ export function StudyWorkspacePreview() {
             {/* Sample Chat Message */}
             <div className="p-3.5 rounded-2xl bg-surface-container-low border border-border/70 text-xs space-y-2">
               <p className="text-foreground leading-relaxed">
-                &quot;Could you simplify why batch normalization stabilizes training?&quot;
+                &quot;Could you explain why spaced repetition is more effective than cramming the night before an exam?&quot;
               </p>
             </div>
 
             <div className="p-3.5 rounded-2xl bg-primary/5 border border-primary/20 text-xs space-y-2">
               <p className="text-foreground/90 leading-relaxed">
-                Batch Norm reduces internal covariate shift by ensuring activations throughout the network have consistent zero-mean and unit variance for each mini-batch.
+                Cramming loads short-term working memory which decays within 48 hours. Spaced repetition exploits the forgetting curve, triggering neural reconsolidation every time you retrieve a concept.
               </p>
               <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-background border border-border text-[10px] font-mono text-primary font-bold">
-                <span>Source: Lecture 7, Slide 21</span>
+                <span>Source: Chapter 3, Page 27</span>
               </div>
             </div>
           </div>
