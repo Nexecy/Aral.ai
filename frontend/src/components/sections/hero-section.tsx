@@ -145,7 +145,7 @@ export function StudyWorkspacePreview() {
             <div className="w-2.5 h-2.5 rounded-full bg-emerald-400/80" />
           </div>
           <span className="hidden sm:inline-block ml-3 font-mono text-[11px] text-muted-foreground">
-            Neural_Networks_Midterm_Review.pdf — 42 pages
+            The_Science_of_Memory_&_Learning.pdf — 32 pages
           </span>
         </div>
 
@@ -249,7 +249,7 @@ export function StudyWorkspacePreview() {
                         </span>
                       </div>
                       <p className="text-base sm:text-lg font-bold text-foreground leading-snug">
-                        How does Backpropagation calculate weight gradients in deep layers without exponential computational cost?
+                        Why is spaced repetition significantly more effective for long-term memory than cramming?
                       </p>
                     </div>
 
@@ -276,12 +276,12 @@ export function StudyWorkspacePreview() {
                         <span className="text-[11px] text-muted-foreground">Click to flip back</span>
                       </div>
                       <p className="text-xs sm:text-sm text-foreground/90 leading-relaxed">
-                        It uses dynamic programming through the chain rule, caching partial derivatives from output layer backwards to avoid redundant recomputations.
+                        Spaced repetition takes advantage of the brain&apos;s natural forgetting curve. Actively retrieving information right before you forget it strengthens neural pathways and doubles retention duration.
                       </p>
                     </div>
 
                     <div className="text-[11px] font-mono text-muted-foreground pt-2 border-t border-border/70">
-                      Citation: Section 4.2, Page 17 (Bishop Pattern Recognition)
+                      Citation: Chapter 2, Page 19 (The Science of Memory & Learning)
                     </div>
                   </div>
                 </div>
