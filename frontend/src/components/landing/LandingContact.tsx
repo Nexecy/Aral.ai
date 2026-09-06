@@ -28,28 +28,11 @@ export function LandingContact() {
     setSubmitting(true);
     setErrorMessage(null);
 
-    // 1. First Attempt: Backend API (Branded HTML + Student Auto-Responder)
-    try {
-      const result = await api.submitContact({
-        name: cleanName,
-        email: cleanEmail,
-        topic,
-        message: cleanMessage,
-        platform: typeof window !== 'undefined' && (window as any).Capacitor ? 'Mobile App' : 'Web Client',
-      });
+    const platform =
+      typeof window !== 'undefined' && (window as any).Capacitor ? 'Mobile App' : 'Web Platform';
 
-      if (result && result.ok) {
-        setSubmitted(true);
-        setMessage('');
-        setSubmitting(false);
-        return;
-      }
-    } catch (backendErr) {
-      console.warn('Backend contact route unreachable, falling back to Web3Forms...', backendErr);
-    }
-
-    // 2. Fallback: Web3Forms direct delivery
     try {
+      // 1. Direct, verified delivery via Web3Forms (bypasses Gmail's 550 unsolicited script blocks)
       const response = await fetch('https://api.web3forms.com/submit', {
         method: 'POST',
         headers: {
@@ -61,10 +44,13 @@ export function LandingContact() {
           name: cleanName,
           email: cleanEmail,
           replyto: cleanEmail,
-          subject: `[Aral.ai Contact] ${topic}: from ${cleanName}`,
-          topic,
-          message: cleanMessage,
-          from_name: 'Aral.ai Contact Form',
+          subject: `[Aral.ai Support] ${topic} — from ${cleanName}`,
+          'Inquiry Topic': topic,
+          'Student Name': cleanName,
+          'Student Email': cleanEmail,
+          'Message Content': cleanMessage,
+          Platform: platform,
+          from_name: 'Aral.ai Support',
           botcheck: '',
         }),
       });
@@ -74,9 +60,18 @@ export function LandingContact() {
       if (response.ok && data.success) {
         setSubmitted(true);
         setMessage('');
+
+        // Silently log to backend/database if available
+        api.submitContact({
+          name: cleanName,
+          email: cleanEmail,
+          topic,
+          message: cleanMessage,
+          platform,
+        }).catch(() => {});
       } else {
         setErrorMessage(
-          data.message || 'Unable to deliver message right now. Please try again or email us directly.'
+          data.message || 'Unable to deliver message right now. Please try again or email aral.ai.app@gmail.com directly.'
         );
       }
     } catch {
