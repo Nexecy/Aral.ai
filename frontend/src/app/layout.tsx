@@ -67,7 +67,7 @@ export default function RootLayout({
         {origin ? <link rel="preconnect" href={origin} /> : null}
         <script src="https://accounts.google.com/gsi/client" async defer></script>
       </head>
-      <body className={`${hanken.className} font-sans min-h-screen bg-background text-foreground antialiased`}>
+      <body className="font-sans min-h-screen bg-background text-foreground antialiased">
         <ThemeProvider>
           <AuthProvider>
             <ThemePreferencesSync />

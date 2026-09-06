@@ -73,7 +73,8 @@ export function StudyWorkspacePreview() {
           }`}
         >
           <Layers className="w-3.5 h-3.5" />
-          <span>Active Recall (12 cards)</span>
+          <span>Active Recall</span>
+          <span className="font-mono text-[11px] font-semibold opacity-70">(12 cards)</span>
         </button>
         <button
           type="button"
@@ -156,21 +157,21 @@ export function StudyWorkspacePreview() {
                     onClick={() => setRevealed(true)}
                     className="px-3 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-surface-container"
                   >
-                    Hard (1d)
+                    Hard <span className="font-mono text-[11px] opacity-70">(1d)</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setRevealed(true)}
                     className="px-3 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-surface-container"
                   >
-                    Good (3d)
+                    Good <span className="font-mono text-[11px] opacity-70">(3d)</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setRevealed(true)}
                     className="px-3 py-1.5 rounded-lg bg-primary/10 text-primary border border-primary/20 text-xs font-bold"
                   >
-                    Easy (7d)
+                    Easy <span className="font-mono text-[11px] opacity-70">(7d)</span>
                   </button>
                 </div>
               </div>

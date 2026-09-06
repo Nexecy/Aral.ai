@@ -19,8 +19,8 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["var(--font-hanken)", "system-ui", "sans-serif"],
-        hanken: ["var(--font-hanken)", "system-ui", "sans-serif"],
+        sans: ["CleanParens", "var(--font-hanken)", "system-ui", "sans-serif"],
+        hanken: ["CleanParens", "var(--font-hanken)", "system-ui", "sans-serif"],
         mono: ["var(--font-jetbrains)", "ui-monospace", "monospace"],
         "label-caps": ["var(--font-jetbrains)", "var(--font-hanken)", "monospace"],
         "display-lg": ["var(--font-hanken)", "sans-serif"],

@@ -3,6 +3,12 @@
 @tailwind utilities;
 
 @layer base {
+  @font-face {
+    font-family: 'CleanParens';
+    src: local('Inter'), local('SF Pro Text'), local('Segoe UI'), local('Roboto'), local('Helvetica Neue'), local('Arial');
+    unicode-range: U+0028, U+0029;
+  }
+
   :root {
     --background: 210 20% 98%; /* #f9fafb / #f9f9f9 Soft off-white surface */
     --foreground: 222 47% 11%; /* #0f172a / #1e293b Deep Charcoal */
