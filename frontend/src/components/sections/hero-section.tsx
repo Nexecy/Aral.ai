@@ -293,7 +293,7 @@ export function StudyWorkspacePreview() {
                   <button
                     type="button"
                     onClick={() => {
-                      setSelectedRating('hard');
+                      setSelectedRating((prev) => (prev === 'hard' ? null : 'hard'));
                       setRevealed(true);
                     }}
                     className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
@@ -307,7 +307,7 @@ export function StudyWorkspacePreview() {
                   <button
                     type="button"
                     onClick={() => {
-                      setSelectedRating('good');
+                      setSelectedRating((prev) => (prev === 'good' ? null : 'good'));
                       setRevealed(true);
                     }}
                     className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
@@ -321,7 +321,7 @@ export function StudyWorkspacePreview() {
                   <button
                     type="button"
                     onClick={() => {
-                      setSelectedRating('easy');
+                      setSelectedRating((prev) => (prev === 'easy' ? null : 'easy'));
                       setRevealed(true);
                     }}
                     className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
