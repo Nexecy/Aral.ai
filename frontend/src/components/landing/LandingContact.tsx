@@ -31,8 +31,34 @@ export function LandingContact() {
     const platform =
       typeof window !== 'undefined' && (window as any).Capacitor ? 'Mobile App' : 'Web Platform';
 
+    // 1. Primary Attempt: Send via /api/contact (Resend Branded Blue/White HTML Email)
     try {
-      // 1. Direct, verified delivery via Web3Forms (bypasses Gmail's 550 unsolicited script blocks)
+      const res = await fetch('/api/contact/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: cleanName,
+          email: cleanEmail,
+          topic,
+          message: cleanMessage,
+          platform,
+        }),
+      });
+
+      const resData = await res.json().catch(() => null);
+
+      if (res.ok && resData && resData.ok) {
+        setSubmitted(true);
+        setMessage('');
+        setSubmitting(false);
+        return;
+      }
+    } catch (resendErr) {
+      console.warn('Resend route unavailable, falling back to Web3Forms...', resendErr);
+    }
+
+    // 2. Fallback Attempt: Direct Web3Forms delivery
+    try {
       const response = await fetch('https://api.web3forms.com/submit', {
         method: 'POST',
         headers: {
@@ -60,15 +86,6 @@ export function LandingContact() {
       if (response.ok && data.success) {
         setSubmitted(true);
         setMessage('');
-
-        // Silently log to backend/database if available
-        api.submitContact({
-          name: cleanName,
-          email: cleanEmail,
-          topic,
-          message: cleanMessage,
-          platform,
-        }).catch(() => {});
       } else {
         setErrorMessage(
           data.message || 'Unable to deliver message right now. Please try again or email aral.ai.app@gmail.com directly.'
