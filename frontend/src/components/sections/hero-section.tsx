@@ -292,42 +292,54 @@ export function StudyWorkspacePreview() {
                 <div className="flex gap-2">
                   <button
                     type="button"
+                    disabled={!revealed}
                     onClick={() => {
+                      if (!revealed) return;
                       setSelectedRating((prev) => (prev === 'hard' ? null : 'hard'));
-                      setRevealed(true);
                     }}
+                    title={!revealed ? 'Flip card to assess confidence' : undefined}
                     className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
-                      selectedRating === 'hard'
-                        ? 'bg-red-500/15 border-red-500 text-red-600 dark:text-red-400 font-bold shadow-xs'
-                        : 'border-border hover:bg-surface-container text-foreground'
+                      !revealed
+                        ? 'opacity-40 cursor-not-allowed border-border text-muted-foreground'
+                        : selectedRating === 'hard'
+                          ? 'bg-red-500/15 border-red-500 text-red-600 dark:text-red-400 font-bold shadow-xs'
+                          : 'border-border hover:bg-surface-container text-foreground'
                     }`}
                   >
                     Hard <span className="font-mono text-[11px] opacity-70">(1d)</span>
                   </button>
                   <button
                     type="button"
+                    disabled={!revealed}
                     onClick={() => {
+                      if (!revealed) return;
                       setSelectedRating((prev) => (prev === 'good' ? null : 'good'));
-                      setRevealed(true);
                     }}
+                    title={!revealed ? 'Flip card to assess confidence' : undefined}
                     className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
-                      selectedRating === 'good'
-                        ? 'bg-amber-500/15 border-amber-500 text-amber-600 dark:text-amber-400 font-bold shadow-xs'
-                        : 'border-border hover:bg-surface-container text-foreground'
+                      !revealed
+                        ? 'opacity-40 cursor-not-allowed border-border text-muted-foreground'
+                        : selectedRating === 'good'
+                          ? 'bg-amber-500/15 border-amber-500 text-amber-600 dark:text-amber-400 font-bold shadow-xs'
+                          : 'border-border hover:bg-surface-container text-foreground'
                     }`}
                   >
                     Good <span className="font-mono text-[11px] opacity-70">(3d)</span>
                   </button>
                   <button
                     type="button"
+                    disabled={!revealed}
                     onClick={() => {
+                      if (!revealed) return;
                       setSelectedRating((prev) => (prev === 'easy' ? null : 'easy'));
-                      setRevealed(true);
                     }}
+                    title={!revealed ? 'Flip card to assess confidence' : undefined}
                     className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
-                      selectedRating === 'easy'
-                        ? 'bg-emerald-500/15 border-emerald-500 text-emerald-600 dark:text-emerald-400 font-bold shadow-xs'
-                        : 'border-border hover:bg-surface-container text-foreground'
+                      !revealed
+                        ? 'opacity-40 cursor-not-allowed border-border text-muted-foreground'
+                        : selectedRating === 'easy'
+                          ? 'bg-emerald-500/15 border-emerald-500 text-emerald-600 dark:text-emerald-400 font-bold shadow-xs'
+                          : 'border-border hover:bg-surface-container text-foreground'
                     }`}
                   >
                     Easy <span className="font-mono text-[11px] opacity-70">(7d)</span>
