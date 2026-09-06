@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useTheme } from 'next-themes';
@@ -34,55 +34,66 @@ export interface HeroSectionProps {
   className?: string;
 }
 
-const sampleFlashcards = [
-  {
-    cardNumber: 3,
-    priority: 'High Retention Priority',
-    badge: 'Spaced Recall',
-    question: 'Why does the human brain remember emotional events much more vividly than everyday memories?',
-    answer: 'The amygdala releases stress hormones (adrenaline and cortisol) during emotional arousal, signaling the hippocampus to prioritize and deeply consolidate those memory traces.',
-    citation: 'Citation: Chapter 4, Page 42 (Cognitive Neuroscience & Memory)',
-  },
-  {
-    cardNumber: 4,
-    priority: 'Core Principle',
-    badge: 'Due Today',
-    question: 'Why does the sky appear blue during the day, but turns orange and red at sunset?',
-    answer: 'Rayleigh scattering causes shorter blue wavelengths of sunlight to scatter broadly across the atmosphere. At sunset, light passes through more air, scattering blue out and leaving longer red and orange wavelengths.',
-    citation: 'Citation: Section 2.4, Page 19 (Earth & Atmospheric Science)',
-  },
-  {
-    cardNumber: 5,
-    priority: 'High Yield Target',
-    badge: 'Spaced Recall',
-    question: 'How does sleep directly improve memory consolidation after studying?',
-    answer: 'During slow-wave and REM sleep, the brain replays newly learned neural patterns, transferring short-term memory traces from the hippocampus into permanent storage in the neocortex.',
-    citation: 'Citation: Chapter 7, Page 85 (Sleep & Cognitive Function)',
-  },
-];
+function TypewriterText({ text }: { text: string }) {
+  const [displayedLength, setDisplayedLength] = useState(0);
+  const [isTypingDone, setIsTypingDone] = useState(false);
+  const [cursorVisible, setCursorVisible] = useState(true);
+
+  useEffect(() => {
+    // Respect prefers-reduced-motion: render full string instantly
+    if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setDisplayedLength(text.length);
+      setIsTypingDone(true);
+      setCursorVisible(false);
+      return;
+    }
+
+    let currentLength = 0;
+    // Brisk typing pace: 2 characters every 24ms (~12ms/char)
+    const interval = setInterval(() => {
+      currentLength = Math.min(currentLength + 2, text.length);
+      setDisplayedLength(currentLength);
+
+      if (currentLength >= text.length) {
+        clearInterval(interval);
+        setIsTypingDone(true);
+        // Cleanly fade out cursor after finishing
+        const fadeTimer = setTimeout(() => {
+          setCursorVisible(false);
+        }, 900);
+        return () => clearTimeout(fadeTimer);
+      }
+    }, 24);
+
+    return () => clearInterval(interval);
+  }, [text]);
+
+  return (
+    <div className="relative">
+      {/* Invisible clone reserves the exact container height to prevent any layout shift (CLS) */}
+      <p className="invisible select-none pointer-events-none leading-relaxed" aria-hidden="true">
+        {text}
+      </p>
+      {/* Visible streaming text with blinking vertical cursor */}
+      <p className="absolute inset-0 text-foreground/90 leading-relaxed">
+        {text.slice(0, displayedLength)}
+        {cursorVisible && (
+          <span
+            className={`inline-block w-[2px] h-[13px] ml-0.5 bg-primary align-middle transition-opacity duration-500 ${
+              isTypingDone ? 'opacity-0' : 'animate-pulse'
+            }`}
+            aria-hidden="true"
+          />
+        )}
+      </p>
+    </div>
+  );
+}
 
 export function StudyWorkspacePreview() {
   const [activeTab, setActiveTab] = useState<'notes' | 'flashcards' | 'quiz'>('flashcards');
-  const [cardIndex, setCardIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
-  const [selectedRating, setSelectedRating] = useState<'hard' | 'good' | 'easy' | null>(null);
-  const [scheduledFeedback, setScheduledFeedback] = useState<string | null>(null);
   const [selectedQuizOption, setSelectedQuizOption] = useState<number | null>(null);
-
-  const currentCard = sampleFlashcards[cardIndex];
-
-  const handleRate = (rating: 'hard' | 'good' | 'easy', interval: string) => {
-    setSelectedRating(rating);
-    setRevealed(true);
-    setScheduledFeedback(`Scheduled for review in ${interval}!`);
-  };
-
-  const handleNextCard = () => {
-    setRevealed(false);
-    setSelectedRating(null);
-    setScheduledFeedback(null);
-    setCardIndex((prev) => (prev + 1) % sampleFlashcards.length);
-  };
 
   return (
     <Mockup className="w-full">
@@ -95,7 +106,7 @@ export function StudyWorkspacePreview() {
             <div className="w-2.5 h-2.5 rounded-full bg-emerald-400/80" />
           </div>
           <span className="hidden sm:inline-block ml-3 font-mono text-[11px] text-muted-foreground">
-            Human_Biology_&_Cognitive_Science.pdf — 38 pages
+            Neural_Networks_Midterm_Review.pdf — 42 pages
           </span>
         </div>
 
@@ -155,10 +166,10 @@ export function StudyWorkspacePreview() {
             <div className="space-y-6">
               <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <span className="font-mono uppercase tracking-wider font-semibold">
-                  Card {currentCard.cardNumber} of 12 • {currentCard.priority}
+                  Card 3 of 12 • High Retention Priority
                 </span>
                 <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold">
-                  {currentCard.badge}
+                  Spaced Recall
                 </span>
               </div>
 
@@ -199,7 +210,7 @@ export function StudyWorkspacePreview() {
                         </span>
                       </div>
                       <p className="text-base sm:text-lg font-bold text-foreground leading-snug">
-                        {currentCard.question}
+                        How does Backpropagation calculate weight gradients in deep layers without exponential computational cost?
                       </p>
                     </div>
 
@@ -226,69 +237,38 @@ export function StudyWorkspacePreview() {
                         <span className="text-[11px] text-muted-foreground">Click to flip back</span>
                       </div>
                       <p className="text-xs sm:text-sm text-foreground/90 leading-relaxed">
-                        {currentCard.answer}
+                        It uses dynamic programming through the chain rule, caching partial derivatives from output layer backwards to avoid redundant recomputations.
                       </p>
                     </div>
 
                     <div className="text-[11px] font-mono text-muted-foreground pt-2 border-t border-border/70">
-                      {currentCard.citation}
+                      Citation: Section 4.2, Page 17 (Bishop Pattern Recognition)
                     </div>
                   </div>
                 </div>
               </div>
 
               <div className="flex items-center justify-between pt-2">
-                <div className="flex items-center gap-2 text-xs min-h-[24px]">
-                  {scheduledFeedback ? (
-                    <div className="flex items-center gap-2 animate-in fade-in">
-                      <span className="font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                        {scheduledFeedback}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={handleNextCard}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-primary text-on-primary text-[10px] font-mono font-bold hover:bg-primary-container transition-all shadow-xs"
-                      >
-                        <span>Next card</span>
-                        <ArrowRight className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ) : (
-                    <span className="text-muted-foreground">Confidence assessment:</span>
-                  )}
-                </div>
+                <span className="text-xs text-muted-foreground">Confidence assessment:</span>
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={() => handleRate('hard', '1 day')}
-                    className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
-                      selectedRating === 'hard'
-                        ? 'bg-red-500/20 border-red-500 text-red-600 dark:text-red-400 font-bold scale-105'
-                        : 'border-border hover:bg-surface-container text-foreground'
-                    }`}
+                    onClick={() => setRevealed(true)}
+                    className="px-3 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-surface-container transition-all"
                   >
                     Hard <span className="font-mono text-[11px] opacity-70">(1d)</span>
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleRate('good', '3 days')}
-                    className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
-                      selectedRating === 'good'
-                        ? 'bg-amber-500/20 border-amber-500 text-amber-600 dark:text-amber-400 font-bold scale-105'
-                        : 'border-border hover:bg-surface-container text-foreground'
-                    }`}
+                    onClick={() => setRevealed(true)}
+                    className="px-3 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-surface-container transition-all"
                   >
                     Good <span className="font-mono text-[11px] opacity-70">(3d)</span>
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleRate('easy', '7 days')}
-                    className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
-                      selectedRating === 'easy'
-                        ? 'bg-emerald-500/20 border-emerald-500 text-emerald-600 dark:text-emerald-400 font-bold scale-105'
-                        : 'border-border hover:bg-surface-container text-foreground'
-                    }`}
+                    onClick={() => setRevealed(true)}
+                    className="px-3 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-surface-container transition-all"
                   >
                     Easy <span className="font-mono text-[11px] opacity-70">(7d)</span>
                   </button>
@@ -305,15 +285,15 @@ export function StudyWorkspacePreview() {
               </div>
 
               <p className="text-base font-bold text-foreground">
-                Which organ in the human body consumes approximately 20% of resting energy despite accounting for only 2% of total body weight?
+                Which activation function suffers most severely from the vanishing gradient problem in deep feedforward architectures?
               </p>
 
               <div className="space-y-2.5">
                 {[
-                  { id: 0, text: 'Heart', correct: false },
-                  { id: 1, text: 'Brain', correct: true },
-                  { id: 2, text: 'Liver', correct: false },
-                  { id: 3, text: 'Lungs', correct: false }
+                  { id: 0, text: 'ReLU (Rectified Linear Unit)', correct: false },
+                  { id: 1, text: 'Sigmoid function', correct: true },
+                  { id: 2, text: 'Leaky ReLU', correct: false },
+                  { id: 3, text: 'ELU (Exponential Linear Unit)', correct: false }
                 ].map((opt) => (
                   <div
                     key={opt.id}
@@ -338,7 +318,7 @@ export function StudyWorkspacePreview() {
 
               {selectedQuizOption !== null && (
                 <p className="text-xs text-muted-foreground leading-relaxed pt-1 animate-in fade-in">
-                  <strong>Explanation:</strong> The human brain utilizes roughly 20% of resting glucose and oxygen to power continuous synaptic signaling and cellular maintenance across 86 billion neurons.
+                  <strong>Explanation:</strong> Sigmoid squashes inputs into [0, 1] where its derivative approaches 0 for large absolute values, causing gradients to vanish during deep backpropagation.
                 </p>
               )}
             </div>
@@ -350,11 +330,11 @@ export function StudyWorkspacePreview() {
                 <FileText className="w-3.5 h-3.5" />
                 <span>SYNTHESIZED NOTE SUMMARY</span>
               </div>
-              <h3 className="text-base font-bold text-foreground">Key Cognitive Science Takeaways</h3>
+              <h3 className="text-base font-bold text-foreground">Key Architecture Takeaways</h3>
               <ul className="space-y-2 list-disc list-inside text-muted-foreground leading-relaxed">
-                <li><strong className="text-foreground">Active Retrieval:</strong> Self-testing forces the brain to rebuild neural pathways, producing up to 300% greater long-term retention than passive reading.</li>
-                <li><strong className="text-foreground">Spaced Intervals:</strong> Reviewing material right before the forgetting curve threshold resets memory strength and doubles retention duration.</li>
-                <li><strong className="text-foreground">Sleep Consolidation:</strong> 7 to 8 hours of sleep allows the hippocampus to transfer daily facts into permanent neocortical storage.</li>
+                <li><strong className="text-foreground">Vanishing Gradients:</strong> Resolved primarily by residual connections (ResNet) and normalized initializations (He/Xavier).</li>
+                <li><strong className="text-foreground">Attention Mechanism:</strong> Replaces recurrent recurrence with dot-product query-key matching, parallelizing sequence computation.</li>
+                <li><strong className="text-foreground">Exam Watchout:</strong> Professor emphasized Theorem 3.4 on convergence guarantees for final exam.</li>
               </ul>
             </div>
           )}
@@ -378,16 +358,14 @@ export function StudyWorkspacePreview() {
             {/* Sample Chat Message */}
             <div className="p-3.5 rounded-2xl bg-surface-container-low border border-border/70 text-xs space-y-2">
               <p className="text-foreground leading-relaxed">
-                &quot;Could you explain why spaced repetition is more effective than cramming the night before an exam?&quot;
+                &quot;Could you simplify why batch normalization stabilizes training?&quot;
               </p>
             </div>
 
             <div className="p-3.5 rounded-2xl bg-primary/5 border border-primary/20 text-xs space-y-2">
-              <p className="text-foreground/90 leading-relaxed">
-                Cramming loads short-term working memory which decays within 48 hours. Spaced repetition exploits the forgetting curve, triggering neural reconsolidation every time you retrieve a concept.
-              </p>
+              <TypewriterText text="Batch Norm reduces internal covariate shift by ensuring activations throughout the network have consistent zero-mean and unit variance for each mini-batch." />
               <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-background border border-border text-[10px] font-mono text-primary font-bold">
-                <span>Source: Chapter 3, Page 27</span>
+                <span>Source: Lecture 7, Slide 21</span>
               </div>
             </div>
           </div>
