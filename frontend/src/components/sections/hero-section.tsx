@@ -38,38 +38,76 @@ function TypewriterText({ text }: { text: string }) {
   const [displayedLength, setDisplayedLength] = useState(0);
   const [isTypingDone, setIsTypingDone] = useState(false);
   const [cursorVisible, setCursorVisible] = useState(true);
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const [isInView, setIsInView] = useState(false);
 
   useEffect(() => {
-    // Respect prefers-reduced-motion: render full string instantly
-    if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      setDisplayedLength(text.length);
-      setIsTypingDone(true);
-      setCursorVisible(false);
-      return;
+    // Start animation once the hero card is visible in the viewport
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsInView(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (containerRef.current) {
+      observer.observe(containerRef.current);
+    } else {
+      setIsInView(true);
     }
 
-    let currentLength = 0;
-    // Brisk typing pace: 2 characters every 24ms (~12ms/char)
-    const interval = setInterval(() => {
-      currentLength = Math.min(currentLength + 2, text.length);
-      setDisplayedLength(currentLength);
+    return () => observer.disconnect();
+  }, []);
 
-      if (currentLength >= text.length) {
-        clearInterval(interval);
-        setIsTypingDone(true);
-        // Cleanly fade out cursor after finishing
-        const fadeTimer = setTimeout(() => {
-          setCursorVisible(false);
-        }, 900);
-        return () => clearTimeout(fadeTimer);
-      }
-    }, 24);
+  useEffect(() => {
+    if (!isInView) return;
 
-    return () => clearInterval(interval);
-  }, [text]);
+    // Noticeable start delay (450ms) after coming into view so typing is clearly seen
+    let interval: NodeJS.Timeout;
+    const startTimeout = setTimeout(() => {
+      let current = 0;
+      // Natural 28ms pace streams text over ~4 seconds across the lines
+      interval = setInterval(() => {
+        current += 1;
+        setDisplayedLength(current);
+
+        if (current >= text.length) {
+          clearInterval(interval);
+          setIsTypingDone(true);
+          // Keep cursor blinking for 1.5s after finishing, then smoothly fade out
+          const fadeTimer = setTimeout(() => {
+            setCursorVisible(false);
+          }, 1500);
+          return () => clearTimeout(fadeTimer);
+        }
+      }, 28);
+    }, 450);
+
+    return () => {
+      clearTimeout(startTimeout);
+      if (interval) clearInterval(interval);
+    };
+  }, [isInView, text]);
+
+  // Click to replay animation
+  const handleReplay = () => {
+    setDisplayedLength(0);
+    setIsTypingDone(false);
+    setCursorVisible(true);
+    setIsInView(false);
+    setTimeout(() => setIsInView(true), 50);
+  };
 
   return (
-    <div className="relative">
+    <div
+      ref={containerRef}
+      onClick={handleReplay}
+      className="relative cursor-pointer select-text"
+      title="Click to replay typing animation"
+    >
       {/* Invisible clone reserves the exact container height to prevent any layout shift (CLS) */}
       <p className="invisible select-none pointer-events-none leading-relaxed" aria-hidden="true">
         {text}
@@ -79,7 +117,7 @@ function TypewriterText({ text }: { text: string }) {
         {text.slice(0, displayedLength)}
         {cursorVisible && (
           <span
-            className={`inline-block w-[2px] h-[13px] ml-0.5 bg-primary align-middle transition-opacity duration-500 ${
+            className={`inline-block w-[2px] h-[1.15em] ml-0.5 bg-primary align-text-bottom transition-opacity duration-500 ${
               isTypingDone ? 'opacity-0' : 'animate-pulse'
             }`}
             aria-hidden="true"
@@ -93,6 +131,7 @@ function TypewriterText({ text }: { text: string }) {
 export function StudyWorkspacePreview() {
   const [activeTab, setActiveTab] = useState<'notes' | 'flashcards' | 'quiz'>('flashcards');
   const [revealed, setRevealed] = useState(false);
+  const [selectedRating, setSelectedRating] = useState<'hard' | 'good' | 'easy' | null>(null);
   const [selectedQuizOption, setSelectedQuizOption] = useState<number | null>(null);
 
   return (
@@ -253,22 +292,43 @@ export function StudyWorkspacePreview() {
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={() => setRevealed(true)}
-                    className="px-3 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-surface-container transition-all"
+                    onClick={() => {
+                      setSelectedRating('hard');
+                      setRevealed(true);
+                    }}
+                    className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+                      selectedRating === 'hard'
+                        ? 'bg-red-500/15 border-red-500 text-red-600 dark:text-red-400 font-bold shadow-xs'
+                        : 'border-border hover:bg-surface-container text-foreground'
+                    }`}
                   >
                     Hard <span className="font-mono text-[11px] opacity-70">(1d)</span>
                   </button>
                   <button
                     type="button"
-                    onClick={() => setRevealed(true)}
-                    className="px-3 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-surface-container transition-all"
+                    onClick={() => {
+                      setSelectedRating('good');
+                      setRevealed(true);
+                    }}
+                    className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+                      selectedRating === 'good'
+                        ? 'bg-amber-500/15 border-amber-500 text-amber-600 dark:text-amber-400 font-bold shadow-xs'
+                        : 'border-border hover:bg-surface-container text-foreground'
+                    }`}
                   >
                     Good <span className="font-mono text-[11px] opacity-70">(3d)</span>
                   </button>
                   <button
                     type="button"
-                    onClick={() => setRevealed(true)}
-                    className="px-3 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-surface-container transition-all"
+                    onClick={() => {
+                      setSelectedRating('easy');
+                      setRevealed(true);
+                    }}
+                    className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+                      selectedRating === 'easy'
+                        ? 'bg-emerald-500/15 border-emerald-500 text-emerald-600 dark:text-emerald-400 font-bold shadow-xs'
+                        : 'border-border hover:bg-surface-container text-foreground'
+                    }`}
                   >
                     Easy <span className="font-mono text-[11px] opacity-70">(7d)</span>
                   </button>
