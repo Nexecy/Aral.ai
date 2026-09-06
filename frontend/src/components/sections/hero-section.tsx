@@ -75,16 +75,13 @@ export function StudyWorkspacePreview() {
     setSelectedRating(rating);
     setRevealed(true);
     setScheduledFeedback(`Scheduled for review in ${interval}!`);
+  };
 
-    // Advance to next card smoothly after 900ms
-    setTimeout(() => {
-      setRevealed(false);
-      setSelectedRating(null);
-      setCardIndex((prev) => (prev + 1) % sampleFlashcards.length);
-      setTimeout(() => {
-        setScheduledFeedback(null);
-      }, 2200);
-    }, 900);
+  const handleNextCard = () => {
+    setRevealed(false);
+    setSelectedRating(null);
+    setScheduledFeedback(null);
+    setCardIndex((prev) => (prev + 1) % sampleFlashcards.length);
   };
 
   return (
@@ -241,12 +238,22 @@ export function StudyWorkspacePreview() {
               </div>
 
               <div className="flex items-center justify-between pt-2">
-                <div className="flex items-center gap-1.5 text-xs min-h-[20px]">
+                <div className="flex items-center gap-2 text-xs min-h-[24px]">
                   {scheduledFeedback ? (
-                    <span className="font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 animate-in fade-in">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                      {scheduledFeedback}
-                    </span>
+                    <div className="flex items-center gap-2 animate-in fade-in">
+                      <span className="font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                        {scheduledFeedback}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleNextCard}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-primary text-on-primary text-[10px] font-mono font-bold hover:bg-primary-container transition-all shadow-xs"
+                      >
+                        <span>Next card</span>
+                        <ArrowRight className="w-3 h-3" />
+                      </button>
+                    </div>
                   ) : (
                     <span className="text-muted-foreground">Confidence assessment:</span>
                   )}
@@ -280,7 +287,7 @@ export function StudyWorkspacePreview() {
                     className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
                       selectedRating === 'easy'
                         ? 'bg-emerald-500/20 border-emerald-500 text-emerald-600 dark:text-emerald-400 font-bold scale-105'
-                        : 'bg-primary/10 text-primary border-primary/20 font-bold hover:bg-primary/15'
+                        : 'border-border hover:bg-surface-container text-foreground'
                     }`}
                   >
                     Easy <span className="font-mono text-[11px] opacity-70">(7d)</span>
