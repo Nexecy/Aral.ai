@@ -254,7 +254,8 @@ class EmailService:
                 server.ehlo()
                 server.starttls()
                 server.ehlo()
-                server.login(settings.SMTP_USER, settings.SMTP_PASSWORD.strip())
+                clean_password = settings.SMTP_PASSWORD.replace(" ", "").strip()
+                server.login(settings.SMTP_USER, clean_password)
                 server.send_message(msg)
             logger.info("Successfully sent email '%s' to %s", subject, to_email)
             return True
