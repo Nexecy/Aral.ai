@@ -1,8 +1,74 @@
 'use client';
 
 import React from 'react';
-import { UploadCloud, Cpu, Award, ArrowRight, Sparkles } from 'lucide-react';
-import Link from 'next/link';
+import { UploadCloud, Cpu, Award, Sparkles } from 'lucide-react';
+import { motion, Variants, useReducedMotion } from 'framer-motion';
+
+const workflowContainerVariants: Variants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.07,
+      delayChildren: 0.05,
+    },
+  },
+};
+
+const workflowItemVariants: Variants = {
+  hidden: { opacity: 0, y: 16 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.45,
+      ease: [0.22, 1, 0.36, 1],
+    },
+  },
+};
+
+function StepOneDocumentMotion() {
+  const prefersReducedMotion = useReducedMotion();
+
+  return (
+    <div className="relative w-10 h-10 rounded-xl bg-surface-container flex items-center justify-center text-primary overflow-hidden">
+      {/* Gliding document/upload icon */}
+      <motion.div
+        animate={
+          prefersReducedMotion
+            ? {}
+            : {
+                y: [-2, 2, -2],
+              }
+        }
+        transition={{
+          repeat: Infinity,
+          duration: 3,
+          ease: 'easeInOut',
+        }}
+      >
+        <UploadCloud className="w-5 h-5" />
+      </motion.div>
+
+      {/* Subtle scanner laser beam passing over the document */}
+      {!prefersReducedMotion && (
+        <motion.div
+          animate={{
+            y: [-16, 44],
+            opacity: [0, 0.9, 0.9, 0],
+          }}
+          transition={{
+            repeat: Infinity,
+            duration: 2.4,
+            ease: 'linear',
+            repeatDelay: 0.8,
+          }}
+          className="pointer-events-none absolute left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-primary to-transparent shadow-[0_0_8px_rgba(79,70,229,0.8)]"
+        />
+      )}
+    </div>
+  );
+}
 
 export function LandingWorkflow() {
   const steps = [
@@ -45,12 +111,19 @@ export function LandingWorkflow() {
           </p>
         </div>
 
-        <div className="mt-9 grid grid-cols-1 md:grid-cols-3 gap-6 relative">
+        <motion.div
+          variants={workflowContainerVariants}
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: '-50px' }}
+          className="mt-9 grid grid-cols-1 md:grid-cols-3 gap-6 relative"
+        >
           {steps.map((item, idx) => {
             const Icon = item.icon;
             return (
-              <div
+              <motion.div
                 key={idx}
+                variants={workflowItemVariants}
                 className="relative rounded-2xl p-6 sm:p-7 bg-card border border-border hover:border-primary/40 transition-all shadow-notion-soft hover:shadow-md space-y-4 flex flex-col justify-between"
               >
                 <div className="space-y-4">
@@ -58,9 +131,13 @@ export function LandingWorkflow() {
                     <span className="font-mono text-3xl font-extrabold text-primary/30">
                       {item.step}
                     </span>
-                    <div className="w-10 h-10 rounded-xl bg-surface-container flex items-center justify-center text-primary">
-                      <Icon className="w-5 h-5" />
-                    </div>
+                    {idx === 0 ? (
+                      <StepOneDocumentMotion />
+                    ) : (
+                      <div className="w-10 h-10 rounded-xl bg-surface-container flex items-center justify-center text-primary">
+                        <Icon className="w-5 h-5" />
+                      </div>
+                    )}
                   </div>
 
                   <h3 className="text-lg font-bold text-foreground">
@@ -75,10 +152,10 @@ export function LandingWorkflow() {
                 <div className="pt-4 border-t border-border/60 text-[11px] font-mono font-semibold text-muted-foreground">
                   Step {idx + 1} of 3
                 </div>
-              </div>
+              </motion.div>
             );
           })}
-        </div>
+        </motion.div>
       </div>
     </section>
   );

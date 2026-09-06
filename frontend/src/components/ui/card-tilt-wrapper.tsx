@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useRef, useState } from 'react';
-import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
+import { motion, useMotionValue, useSpring, useTransform, useReducedMotion } from 'framer-motion';
 
 export interface CardTiltWrapperProps {
   children: React.ReactNode;
@@ -15,12 +15,12 @@ export function CardTiltWrapper({
   children,
   className = '',
   maxTilt = 15,
-  glareOpacity = 0.35,
+  glareOpacity = 0.25,
   enableGlare = true,
 }: CardTiltWrapperProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [isHovered, setIsHovered] = useState(false);
-  const [glarePos, setGlarePos] = useState({ x: 50, y: 50 });
+  const prefersReducedMotion = useReducedMotion();
 
   // Spring-smoothed rotation angles
   const mouseX = useMotionValue(0);
@@ -41,16 +41,16 @@ export function CardTiltWrapper({
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    const xPct = x / rect.width - 0.5;
-    const yPct = y / rect.height - 0.5;
+    // Direct CSS custom properties update without triggering React component re-renders
+    cardRef.current.style.setProperty('--mouse-x', `${x}px`);
+    cardRef.current.style.setProperty('--mouse-y', `${y}px`);
 
-    mouseX.set(xPct);
-    mouseY.set(yPct);
-
-    setGlarePos({
-      x: (x / rect.width) * 100,
-      y: (y / rect.height) * 100,
-    });
+    if (!prefersReducedMotion) {
+      const xPct = x / rect.width - 0.5;
+      const yPct = y / rect.height - 0.5;
+      mouseX.set(xPct);
+      mouseY.set(yPct);
+    }
   };
 
   const handleMouseEnter = () => {
@@ -75,14 +75,18 @@ export function CardTiltWrapper({
       <motion.div
         style={{
           transformStyle: 'preserve-3d',
-          rotateX,
-          rotateY,
+          rotateX: prefersReducedMotion ? 0 : rotateX,
+          rotateY: prefersReducedMotion ? 0 : rotateY,
           transformPerspective: 1000,
         }}
-        whileHover={{
-          scale: 1.025,
-          y: -6,
-        }}
+        whileHover={
+          prefersReducedMotion
+            ? {}
+            : {
+                scale: 1.02,
+                y: -4,
+              }
+        }
         transition={{
           type: 'spring',
           stiffness: 350,
@@ -90,13 +94,13 @@ export function CardTiltWrapper({
         }}
         className="relative h-full w-full will-change-transform"
       >
-        {/* Subtle dynamic glare overlay that tracks cursor */}
+        {/* Dynamic Cursor Spotlight (radial border & surface glow without re-rendering) */}
         {enableGlare && (
           <div
             className="pointer-events-none absolute inset-0 z-30 rounded-2xl overflow-hidden transition-opacity duration-300"
             style={{
               opacity: isHovered ? 1 : 0,
-              background: `radial-gradient(400px circle at ${glarePos.x}% ${glarePos.y}%, rgba(255, 255, 255, ${glareOpacity}) 0%, rgba(255, 255, 255, 0.05) 45%, transparent 80%)`,
+              background: `radial-gradient(350px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(79, 70, 229, 0.12), transparent 75%), radial-gradient(220px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(255, 255, 255, ${glareOpacity}) 0%, transparent 60%)`,
               transform: 'translateZ(1px)',
             }}
           />
