@@ -12,7 +12,7 @@ import smtplib
 from datetime import datetime, timezone
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from email.utils import formatdate, make_msgid
+from email.utils import formatdate
 from typing import Any, Dict, Optional
 
 from app.core.config import settings
@@ -302,9 +302,7 @@ class EmailService:
         msg["From"] = f"{settings.SMTP_FROM_NAME} <{settings.SMTP_USER}>"
         msg["To"] = to_email
         msg["Date"] = formatdate(localtime=True)
-        msg["Message-ID"] = make_msgid(domain="gmail.com")
-        msg["MIME-Version"] = "1.0"
-        if reply_to:
+        if reply_to and reply_to.strip().lower() != to_email.strip().lower():
             msg["Reply-To"] = reply_to
 
         # Crucial for anti-spam: attach plain text first, then HTML

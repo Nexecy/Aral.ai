@@ -44,7 +44,8 @@ def test_contact_endpoint_success():
         "message": "I would love to see anki flashcard export!",
         "platform": "Web Client",
     }
-    response = client.post("/api/contact", json=payload)
+    with patch.object(email_service, "_send_smtp", return_value=True):
+        response = client.post("/api/contact", json=payload)
     assert response.status_code == 200
     data = response.json()
     assert data["ok"] is True
