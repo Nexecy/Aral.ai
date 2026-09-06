@@ -1,7 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Mail, MessageSquare, Send, CheckCircle2, Sparkles, Building2, HelpCircle } from 'lucide-react';
+import { Mail, Send, CheckCircle2, Sparkles, HelpCircle, AlertCircle, Loader2 } from 'lucide-react';
+
+const WEB3FORMS_ACCESS_KEY =
+  process.env.NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY || 'b9829b92-ee07-4020-9a2e-dae85955121f';
 
 export function LandingContact() {
   const [name, setName] = useState('');
@@ -10,17 +13,51 @@ export function LandingContact() {
   const [message, setMessage] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!name.trim() || !email.trim() || !message.trim()) return;
 
     setSubmitting(true);
-    // Simulate swift confirmation
-    setTimeout(() => {
+    setErrorMessage(null);
+
+    try {
+      const response = await fetch('https://api.web3forms.com/submit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          access_key: WEB3FORMS_ACCESS_KEY,
+          name: name.trim(),
+          email: email.trim(),
+          subject: `[Aral.ai Contact] ${topic}: from ${name.trim()}`,
+          topic,
+          message: message.trim(),
+          from_name: 'Aral.ai Contact Form',
+          botcheck: '',
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setSubmitted(true);
+        setMessage('');
+      } else {
+        setErrorMessage(
+          data.message || 'Unable to deliver message right now. Please try again or email us directly.'
+        );
+      }
+    } catch {
+      setErrorMessage(
+        'A network connection error occurred while sending your message. Please verify your connection or email aral.ai.app@gmail.com directly.'
+      );
+    } finally {
       setSubmitting(false);
-      setSubmitted(true);
-    }, 600);
+    }
   };
 
   return (
@@ -97,9 +134,9 @@ export function LandingContact() {
                   <div className="w-14 h-14 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 mx-auto flex items-center justify-center">
                     <CheckCircle2 className="w-8 h-8" />
                   </div>
-                  <h3 className="text-xl font-bold text-foreground">Thank You for Reaching Out!</h3>
+                  <h3 className="text-xl font-bold text-foreground">Message Sent Successfully!</h3>
                   <p className="text-xs sm:text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
-                    We&apos;ve received your message. A member of the Aral.ai team will review your inquiry and get back to you shortly at <strong className="text-foreground">{email}</strong>.
+                    Thank you for reaching out. We&apos;ve received your message and sent a copy to our support inbox. A member of the Aral.ai team will follow up with you at <strong className="text-foreground">{email}</strong> shortly.
                   </p>
                   <button
                     type="button"
@@ -107,14 +144,38 @@ export function LandingContact() {
                       setSubmitted(false);
                       setMessage('');
                     }}
-                    className="mt-2 text-xs font-bold text-primary hover:underline"
+                    className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
                   >
                     Send another note
                   </button>
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-4">
-                  <h3 className="text-lg font-bold text-foreground">Send Us a Direct Message</h3>
+                  <input type="checkbox" name="botcheck" className="hidden" style={{ display: 'none' }} />
+
+                  <div>
+                    <h3 className="text-lg font-bold text-foreground">Send Us a Direct Message</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Submissions are routed directly to <span className="font-semibold text-foreground">aral.ai.app@gmail.com</span>.
+                    </p>
+                  </div>
+
+                  {errorMessage && (
+                    <div className="flex items-start gap-2.5 p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs leading-relaxed animate-in fade-in duration-200">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <span>{errorMessage}</span>
+                        <div className="mt-1">
+                          <a
+                            href="mailto:aral.ai.app@gmail.com"
+                            className="underline font-semibold hover:opacity-80"
+                          >
+                            Send email directly to aral.ai.app@gmail.com &rarr;
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
@@ -125,10 +186,11 @@ export function LandingContact() {
                         id="contact-name"
                         type="text"
                         required
+                        disabled={submitting}
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                         placeholder="Alex Chen"
-                        className="w-full text-xs sm:text-sm bg-surface-container-low px-4 py-2.5 rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-foreground placeholder:text-muted-foreground"
+                        className="w-full text-xs sm:text-sm bg-surface-container-low px-4 py-2.5 rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-foreground placeholder:text-muted-foreground disabled:opacity-60"
                       />
                     </div>
 
@@ -140,10 +202,11 @@ export function LandingContact() {
                         id="contact-email"
                         type="email"
                         required
+                        disabled={submitting}
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         placeholder="alex@university.edu"
-                        className="w-full text-xs sm:text-sm bg-surface-container-low px-4 py-2.5 rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-foreground placeholder:text-muted-foreground"
+                        className="w-full text-xs sm:text-sm bg-surface-container-low px-4 py-2.5 rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-foreground placeholder:text-muted-foreground disabled:opacity-60"
                       />
                     </div>
                   </div>
@@ -155,8 +218,9 @@ export function LandingContact() {
                     <select
                       id="contact-topic"
                       value={topic}
+                      disabled={submitting}
                       onChange={(e) => setTopic(e.target.value)}
-                      className="w-full text-xs sm:text-sm bg-surface-container-low px-4 py-2.5 rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-foreground"
+                      className="w-full text-xs sm:text-sm bg-surface-container-low px-4 py-2.5 rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-foreground disabled:opacity-60"
                     >
                       <option value="General Inquiry">General Question</option>
                       <option value="Feature Suggestion">Feature Request / Feedback</option>
@@ -173,20 +237,30 @@ export function LandingContact() {
                       id="contact-message"
                       rows={4}
                       required
+                      disabled={submitting}
                       value={message}
                       onChange={(e) => setMessage(e.target.value)}
                       placeholder="Tell us how we can assist you..."
-                      className="w-full text-xs sm:text-sm bg-surface-container-low px-4 py-2.5 rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-foreground placeholder:text-muted-foreground resize-none"
+                      className="w-full text-xs sm:text-sm bg-surface-container-low px-4 py-2.5 rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-foreground placeholder:text-muted-foreground resize-none disabled:opacity-60"
                     />
                   </div>
 
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-primary hover:bg-primary-container text-on-primary text-xs sm:text-sm font-bold transition-all shadow-sm hover:shadow-md disabled:opacity-60"
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-primary hover:bg-primary-container text-on-primary text-xs sm:text-sm font-bold transition-all shadow-sm hover:shadow-md disabled:opacity-60 cursor-pointer disabled:cursor-not-allowed"
                   >
-                    <span>{submitting ? 'Sending message…' : 'Send Message'}</span>
-                    <Send className="w-4 h-4" />
+                    {submitting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Sending message to team…</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Send Message</span>
+                        <Send className="w-4 h-4" />
+                      </>
+                    )}
                   </button>
                 </form>
               )}
@@ -197,3 +271,4 @@ export function LandingContact() {
     </section>
   );
 }
+
