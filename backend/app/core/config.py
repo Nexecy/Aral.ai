@@ -83,6 +83,22 @@ class Settings(BaseSettings):
         return origins
 
     @property
+    def is_production(self) -> bool:
+        return (self.ENVIRONMENT or "").strip().lower() == "production"
+
+    @property
+    def allow_anonymous_fallback(self) -> bool:
+        """Whether requests without a token may resolve to the shared local
+        single-user identity.
+
+        This convenience fallback keeps local development and the test suite
+        working without configured auth. It is unsafe for a multi-user
+        deployment, so it is disabled in production or whenever real Supabase
+        auth is configured.
+        """
+        return not self.is_production and not self.has_supabase_credentials
+
+    @property
     def has_gemini_key(self) -> bool:
         return bool(self.GEMINI_API_KEY and len(self.GEMINI_API_KEY.strip()) > 5)
 

@@ -144,12 +144,23 @@ async def get_current_user(
     """
     Resolve the caller from Authorization: Bearer <token>.
 
-    Missing tokens and the test sentinel `demo-token` map to the local
-    single-user identity. Any other presented token is verified and never
-    remapped onto that identity.
+    In local development and tests (see `settings.allow_anonymous_fallback`),
+    missing tokens and the test sentinel `demo-token` map to the local
+    single-user identity. In production, or whenever real Supabase auth is
+    configured, that convenience fallback is disabled and a valid token is
+    required. Any other presented token is verified and never remapped onto
+    the local identity.
     """
+    allow_fallback = settings.allow_anonymous_fallback
+
     if not authorization:
-        return LOCAL_USER
+        if allow_fallback:
+            return LOCAL_USER
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     parts = authorization.split(" ")
     if len(parts) != 2 or parts[0].lower() != "bearer":
@@ -160,7 +171,12 @@ async def get_current_user(
 
     token = parts[1]
     if token == "demo-token":
-        return LOCAL_USER
+        if allow_fallback:
+            return LOCAL_USER
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token verification failed: demo credentials are disabled.",
+        )
 
     return _decode_user_token(token)
 
