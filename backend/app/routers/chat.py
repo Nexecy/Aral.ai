@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Body
 from fastapi.responses import StreamingResponse
 from typing import List, Dict, Any
 from app.core.auth import get_current_user, require_verified_email
+from app.core.limits import check_and_consume_quota
 from app.core.ownership import require_session_owner
 from app.services.db_service import db_service
 from app.services.gemini_service import gemini_service
@@ -21,6 +22,7 @@ async def stream_chat(
     Real-time AI Chat assistant scoped to study session. Streams response token-by-token via Server-Sent Events (SSE).
     """
     session = await require_session_owner(session_id, user["id"])
+    await check_and_consume_quota(user["id"], "chat")
 
     # 1. Store user message in database
     await db_service.add_chat_message(

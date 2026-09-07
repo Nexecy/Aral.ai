@@ -47,6 +47,11 @@ export function LandingFooter() {
                   </a>
                 </li>
                 <li>
+                  <Link href="/pricing/" className="hover:text-foreground transition-colors">
+                    Pricing
+                  </Link>
+                </li>
+                <li>
                   <a href="#faq" className="hover:text-foreground transition-colors">
                     Frequently Asked
                   </a>

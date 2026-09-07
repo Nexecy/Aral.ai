@@ -50,6 +50,20 @@ Adheres strictly to the **Notion Design System** — warm paper canvas (`#f6f5f4
 
 ---
 
+## Freemium plans (PHP)
+
+| Plan | Price | Daily caps (UTC) |
+|------|-------|------------------|
+| **Free** | ₱0 | 3 notes · 3 flashcard gens · 3 quizzes · 20 chat · 3 uploads |
+| **Student** | ₱199/mo | 40 notes · 40 flashcard gens · 40 quizzes · 300 chat · 30 uploads |
+
+- Usage meters + stub upgrade: **Settings → Plan** or `/pricing`
+- BYOK: save a personal Gemini key to bypass platform daily caps
+- Run the updated `supabase/schema.sql` (or `profiles.sql`) so `profiles.plan` and `usage_daily` exist
+- Early launch uses `BILLING_MODE=stub` (no card charge yet)
+
+---
+
 ## 🚀 Quick Start
 
 ### 1. Backend (FastAPI)

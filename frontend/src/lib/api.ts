@@ -17,7 +17,9 @@ import {
   Exam,
   ExamInput,
   DashboardSummary,
-  AuthSession
+  AuthSession,
+  UsageSnapshot,
+  BillingPlan
 } from './types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
@@ -249,6 +251,56 @@ class ApiClient {
   // ---------------------------------------------------------------------------
   async getMe(): Promise<User & { has_supabase: boolean; has_gemini: boolean; gemini_model: string }> {
     return this.cachedRequest('/auth/me', 15000);
+  }
+
+  async getBillingPlans(): Promise<{
+    currency: string;
+    plans: BillingPlan[];
+    billing_mode: string;
+  }> {
+    return this.cachedRequest('/billing/plans', 60000);
+  }
+
+  async getUsage(): Promise<UsageSnapshot> {
+    return this.request('/billing/usage');
+  }
+
+  async upgradePlan(plan: string = 'student'): Promise<{
+    ok: boolean;
+    message: string;
+    plan: string;
+    usage: UsageSnapshot;
+  }> {
+    this.invalidateCache('/auth');
+    return this.request('/billing/upgrade', {
+      method: 'POST',
+      body: JSON.stringify({ plan })
+    });
+  }
+
+  async cancelPlan(): Promise<{
+    ok: boolean;
+    message: string;
+    plan: string;
+    usage: UsageSnapshot;
+  }> {
+    this.invalidateCache('/auth');
+    return this.request('/billing/cancel', {
+      method: 'POST'
+    });
+  }
+
+  async saveByokKey(apiKey: string | null): Promise<{
+    ok: boolean;
+    has_byok: boolean;
+    message: string;
+    usage: UsageSnapshot;
+  }> {
+    this.invalidateCache('/auth');
+    return this.request('/billing/byok', {
+      method: 'PUT',
+      body: JSON.stringify({ api_key: apiKey })
+    });
   }
 
   async updateProfile(payload: {

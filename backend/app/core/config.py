@@ -41,6 +41,30 @@ class Settings(BaseSettings):
     PDF_OCR_CONCURRENCY: int = Field(default=1, description="Concurrency limit for Gemini Vision OCR tasks (1 strictly for free tier rate safety)")
     GEMINI_OCR_DELAY_SECONDS: float = Field(default=4.2, description="Mandatory delay between consecutive Gemini Vision calls to stay strictly under 15 RPM")
 
+    # Freemium daily limits (UTC day)
+    FREE_DAILY_NOTES: int = Field(default=3)
+    FREE_DAILY_FLASHCARDS: int = Field(default=3)
+    FREE_DAILY_QUIZZES: int = Field(default=3)
+    FREE_DAILY_CHAT: int = Field(default=20)
+    FREE_DAILY_UPLOADS: int = Field(default=3)
+
+    STUDENT_DAILY_NOTES: int = Field(default=40)
+    STUDENT_DAILY_FLASHCARDS: int = Field(default=40)
+    STUDENT_DAILY_QUIZZES: int = Field(default=40)
+    STUDENT_DAILY_CHAT: int = Field(default=300)
+    STUDENT_DAILY_UPLOADS: int = Field(default=30)
+
+    # Student plan price in Philippine pesos (display + stub checkout)
+    STUDENT_PRICE_PHP: int = Field(default=199)
+
+    # Billing: stub upgrades plan immediately; paymongo reserved for later
+    BILLING_MODE: str = Field(default="stub")  # stub | paymongo
+    PAYMONGO_SECRET_KEY: str = Field(default="")
+    PAYMONGO_WEBHOOK_SECRET: str = Field(default="")
+
+    # Optional secret used to obfuscate stored BYOK Gemini keys at rest
+    BYOK_ENCRYPTION_SECRET: str = Field(default="aral-local-byok-secret")
+
     @property
     def frontend_origin(self) -> str:
         url = (self.FRONTEND_URL or "").strip().rstrip("/")

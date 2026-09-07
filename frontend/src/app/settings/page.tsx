@@ -12,16 +12,18 @@ import {
   UserRound,
   Cookie,
   Pipette,
-  Sparkles
+  Sparkles,
+  CreditCard
 } from 'lucide-react';
 import { useTheme, FONT_SIZES, COLOR_SCHEMES } from '@/context/ThemeContext';
 import { usePomodoro } from '@/context/PomodoroContext';
 import { sound } from '@/lib/sound';
 import { ShortcutsManager } from '@/components/settings/ShortcutsManager';
 import { ProfileSettings } from '@/components/settings/ProfileSettings';
+import { PlanSettings } from '@/components/settings/PlanSettings';
 import { openCookiePreferences } from '@/components/common/CookieConsent';
 
-type SettingsTab = 'profile' | 'appearance' | 'focus' | 'shortcuts';
+type SettingsTab = 'profile' | 'plan' | 'appearance' | 'focus' | 'shortcuts';
 
 interface TabItem {
   id: SettingsTab;
@@ -32,6 +34,7 @@ interface TabItem {
 
 const TABS: TabItem[] = [
   { id: 'profile', label: 'Profile', icon: UserRound },
+  { id: 'plan', label: 'Plan', icon: CreditCard },
   { id: 'appearance', label: 'Appearance', icon: Palette },
   { id: 'focus', label: 'Focus', icon: Volume2 },
   { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard, desktopOnly: true }
@@ -113,7 +116,7 @@ export default function SettingsPage() {
               Settings & Preferences
             </h1>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Theme, profile, reading font size, focus defaults{!isMobileOrTablet && ', and keyboard shortcuts'}
+              Theme, profile, plan & usage, reading font size, focus defaults{!isMobileOrTablet && ', and keyboard shortcuts'}
             </p>
           </div>
         </div>
@@ -139,6 +142,8 @@ export default function SettingsPage() {
       </div>
 
       {tab === 'profile' && <ProfileSettings />}
+
+      {tab === 'plan' && <PlanSettings />}
 
       {tab === 'appearance' && (
       <div className="space-y-6">

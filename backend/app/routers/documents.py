@@ -1,7 +1,8 @@
 import os
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
 from typing import List, Dict, Any
-from app.core.auth import get_current_user
+from app.core.auth import get_current_user, require_verified_email
+from app.core.limits import check_and_consume_quota
 from app.services.pdf_service import pdf_service
 from app.services.storage_service import storage_service
 from app.services.db_service import db_service
@@ -89,7 +90,7 @@ async def _process_document_background(
 async def upload_document(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    user: Dict[str, Any] = Depends(get_current_user)
+    user: Dict[str, Any] = Depends(require_verified_email)
 ):
     """
     Upload reference study PDF/document non-blocking: stores raw file in storage, creates record with status 'processing',
@@ -98,6 +99,7 @@ async def upload_document(
     if not file.filename:
         raise HTTPException(status_code=400, detail="Missing filename")
 
+    await check_and_consume_quota(user["id"], "uploads")
     content_bytes = await file.read()
     if len(content_bytes) == 0:
         raise HTTPException(status_code=400, detail="Uploaded file is empty")

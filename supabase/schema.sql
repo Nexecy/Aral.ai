@@ -220,6 +220,39 @@ ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS bio TEXT;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS gender TEXT;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS theme TEXT;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'free';
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS plan_updated_at TIMESTAMPTZ;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS byok_gemini_key TEXT;
+
+DO $$
+BEGIN
+    ALTER TABLE public.profiles
+        ADD CONSTRAINT profiles_plan_check CHECK (plan IN ('free', 'student'));
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END
+$$;
+
+-- Daily AI usage meters (UTC date)
+CREATE TABLE IF NOT EXISTS public.usage_daily (
+    user_id UUID NOT NULL,
+    usage_date DATE NOT NULL DEFAULT (TIMEZONE('utc'::text, NOW()))::date,
+    notes_gens INT NOT NULL DEFAULT 0,
+    flashcard_gens INT NOT NULL DEFAULT 0,
+    quiz_gens INT NOT NULL DEFAULT 0,
+    chat_msgs INT NOT NULL DEFAULT 0,
+    uploads INT NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, usage_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_usage_daily_user_date ON public.usage_daily(user_id, usage_date DESC);
+
+ALTER TABLE public.usage_daily ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage own usage" ON public.usage_daily;
+CREATE POLICY "Users can manage own usage" ON public.usage_daily
+    FOR ALL
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Users can manage own profile" ON public.profiles;
