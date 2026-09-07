@@ -227,6 +227,22 @@ def test_notes_update(session_id):
     assert saved["content"]["title"] == "Updated Study Guide"
 
 
+def test_update_session_title(session_id):
+    custom_label = "Civil Law - Midterm Review (Chapter 1-4)"
+    response = client.patch(
+        f"/api/sessions/{session_id}",
+        json={"title": custom_label},
+        headers=AUTH,
+    )
+    assert response.status_code == 200
+    updated = response.json()
+    assert updated["title"] == custom_label
+
+    fetched = client.get(f"/api/sessions/{session_id}", headers=AUTH)
+    assert fetched.status_code == 200
+    assert fetched.json()["title"] == custom_label
+
+
 def test_flashcard_generation(session_id):
     response = client.post(f"/api/sessions/{session_id}/flashcards/generate?count=5", headers=AUTH)
     assert response.status_code == 200

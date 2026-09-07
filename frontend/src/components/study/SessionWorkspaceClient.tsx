@@ -26,7 +26,10 @@ import {
   CloudOff,
   Keyboard,
   FileText,
-  Type
+  Type,
+  Pencil,
+  Check,
+  X
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -273,6 +276,44 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
 
   const [showShortcuts, setShowShortcuts] = useState<boolean>(false);
   const { shortcuts } = useShortcutMap();
+
+  const [isEditingTitle, setIsEditingTitle] = useState<boolean>(false);
+  const [customTitleInput, setCustomTitleInput] = useState<string>('');
+  const [isSavingTitle, setIsSavingTitle] = useState<boolean>(false);
+
+  const startEditingTitle = () => {
+    if (!snapshot?.session) return;
+    setCustomTitleInput(snapshot.session.title);
+    setIsEditingTitle(true);
+  };
+
+  const saveCustomTitle = async () => {
+    if (!snapshot?.session || !customTitleInput.trim()) {
+      setIsEditingTitle(false);
+      return;
+    }
+    const trimmed = customTitleInput.trim();
+    if (trimmed === snapshot.session.title) {
+      setIsEditingTitle(false);
+      return;
+    }
+    try {
+      setIsSavingTitle(true);
+      await api.updateSession(sessionId, { title: trimmed });
+      setSnapshot((prev) => (prev ? { ...prev, session: { ...prev.session, title: trimmed } } : prev));
+      linkSession(sessionId, trimmed);
+      setIsEditingTitle(false);
+    } catch (err) {
+      console.error('Failed to update session title:', err);
+      alert('Could not update session title. Please try again.');
+    } finally {
+      setIsSavingTitle(false);
+    }
+  };
+
+  const cancelEditingTitle = () => {
+    setIsEditingTitle(false);
+  };
 
   const saver = useMemo(() => createDebouncedSaver(700), []);
 
@@ -1006,11 +1047,58 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
           <div className="flex items-center gap-2 text-xs text-on-surface-variant mb-1.5 font-medium">
             <Link href="/" className="hover:text-primary transition-colors shrink-0">Library</Link>
             <ChevronRight className="w-3.5 h-3.5 shrink-0" />
+            <Link href="/history/" className="hover:text-primary transition-colors shrink-0">History</Link>
+            <ChevronRight className="w-3.5 h-3.5 shrink-0" />
             <span className="font-semibold text-on-surface truncate max-w-[200px] sm:max-w-md">{session.title}</span>
           </div>
-          <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight text-on-surface break-words">
-            {session.title}
-          </h1>
+
+          {isEditingTitle ? (
+            <div className="flex items-center gap-2 mt-1">
+              <input
+                type="text"
+                value={customTitleInput}
+                onChange={(e) => setCustomTitleInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void saveCustomTitle();
+                  if (e.key === 'Escape') cancelEditingTitle();
+                }}
+                autoFocus
+                maxLength={120}
+                className="text-base sm:text-xl font-bold bg-surface-container-low px-3 py-1.5 rounded-xl border border-primary focus:outline-none focus:ring-2 focus:ring-primary text-on-surface w-full max-w-xl shadow-sm"
+              />
+              <button
+                type="button"
+                onClick={() => void saveCustomTitle()}
+                disabled={isSavingTitle}
+                className="p-2 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 shrink-0"
+                title="Save label (Enter)"
+              >
+                {isSavingTitle ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+              </button>
+              <button
+                type="button"
+                onClick={cancelEditingTitle}
+                disabled={isSavingTitle}
+                className="p-2 rounded-xl border border-outline-variant text-on-surface-variant hover:bg-surface-container transition-colors disabled:opacity-50 shrink-0"
+                title="Cancel (Esc)"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2.5 group/title">
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight text-on-surface break-words">
+                {session.title}
+              </h1>
+              <button
+                onClick={startEditingTitle}
+                className="p-1.5 rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors opacity-70 group-hover/title:opacity-100 shrink-0"
+                title="Rename study session label"
+              >
+                <Pencil className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-2 shrink-0 flex-wrap">

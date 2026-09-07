@@ -10,9 +10,11 @@ import {
   Keyboard,
   Palette,
   UserRound,
-  Cookie
+  Cookie,
+  Pipette,
+  Sparkles
 } from 'lucide-react';
-import { useTheme, FONT_SIZES } from '@/context/ThemeContext';
+import { useTheme, FONT_SIZES, COLOR_SCHEMES } from '@/context/ThemeContext';
 import { usePomodoro } from '@/context/PomodoroContext';
 import { sound } from '@/lib/sound';
 import { ShortcutsManager } from '@/components/settings/ShortcutsManager';
@@ -36,10 +38,24 @@ const TABS: TabItem[] = [
 ];
 
 export default function SettingsPage() {
-  const { theme, setTheme, fontSize, setFontSize } = useTheme();
+  const {
+    theme,
+    setTheme,
+    fontSize,
+    setFontSize,
+    colorScheme,
+    customPrimaryHex,
+    setColorScheme,
+    activeHexColor
+  } = useTheme();
   const pomodoro = usePomodoro();
   const [tab, setTab] = useState<SettingsTab>('appearance');
   const [isMobileOrTablet, setIsMobileOrTablet] = useState<boolean>(false);
+  const [customHexInput, setCustomHexInput] = useState<string>(customPrimaryHex);
+
+  useEffect(() => {
+    setCustomHexInput(customPrimaryHex);
+  }, [customPrimaryHex]);
 
   // Detect mobile / tablet / coarse pointer
   useEffect(() => {
@@ -170,6 +186,160 @@ export default function SettingsPage() {
               <p className="text-xs text-muted-foreground">
                 Deep slate & charcoal surfaces designed for night-time study sessions.
               </p>
+            </div>
+          </div>
+        </div>
+
+        {/* ── COLOR SCHEME & ACCENT PALETTE ───────────────────────────── */}
+        <div className="p-6 rounded-2xl bg-card border border-border shadow-notion-soft space-y-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+                <Palette className="w-4 h-4 text-primary" />
+                <span>Site Accent & Color Scheme</span>
+              </h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Customize the primary accent color across buttons, cards, focus rings, and study highlights
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span
+                className="w-3.5 h-3.5 rounded-full ring-2 ring-border shrink-0"
+                style={{ backgroundColor: activeHexColor }}
+              />
+              <span className="text-xs font-mono font-bold text-muted-foreground">
+                {activeHexColor.toUpperCase()}
+              </span>
+            </div>
+          </div>
+
+          {/* Starter Palettes Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {COLOR_SCHEMES.map((scheme) => {
+              const isSelected = colorScheme === scheme.id;
+              return (
+                <div
+                  key={scheme.id}
+                  onClick={() => setColorScheme(scheme.id)}
+                  className={`p-3.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
+                    isSelected
+                      ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                      : 'border-border bg-card hover:bg-muted/30'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="w-4 h-4 rounded-full shrink-0 shadow-sm ring-1 ring-black/10"
+                        style={{ backgroundColor: scheme.hex }}
+                      />
+                      <span className="font-bold text-xs text-foreground">{scheme.name}</span>
+                    </div>
+                    {isSelected && <Check className="w-3.5 h-3.5 text-primary" />}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-snug">
+                    {scheme.description}
+                  </p>
+                </div>
+              );
+            })}
+
+            {/* Custom Color Option Card */}
+            <div
+              className={`p-3.5 rounded-xl border transition-all flex flex-col justify-between ${
+                colorScheme === 'custom'
+                  ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                  : 'border-border bg-card hover:bg-muted/30'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div
+                    className="w-4 h-4 rounded-full shrink-0 shadow-sm ring-1 ring-black/10 cursor-pointer overflow-hidden relative"
+                    style={{ backgroundColor: customPrimaryHex }}
+                  >
+                    <input
+                      type="color"
+                      value={customPrimaryHex}
+                      onChange={(e) => {
+                        setCustomHexInput(e.target.value);
+                        setColorScheme('custom', e.target.value);
+                      }}
+                      className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
+                      title="Pick custom color"
+                    />
+                  </div>
+                  <span className="font-bold text-xs text-foreground">Custom Color</span>
+                </div>
+                {colorScheme === 'custom' && <Check className="w-3.5 h-3.5 text-primary" />}
+              </div>
+
+              <div className="space-y-2 mt-1">
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      value={customHexInput}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setCustomHexInput(val);
+                        if (/^#[0-9A-Fa-f]{6}$/.test(val)) {
+                          setColorScheme('custom', val);
+                        }
+                      }}
+                      placeholder="#6366F1"
+                      maxLength={7}
+                      className="w-full text-xs font-mono bg-surface-container-low px-2 py-1.5 rounded-lg border border-border focus:outline-none focus:ring-1 focus:ring-primary text-foreground"
+                    />
+                  </div>
+                  <label className="p-1.5 rounded-lg border border-border bg-surface-container-low hover:bg-surface-container cursor-pointer transition-colors shrink-0 flex items-center justify-center">
+                    <Pipette className="w-3.5 h-3.5 text-muted-foreground" />
+                    <input
+                      type="color"
+                      value={customPrimaryHex}
+                      onChange={(e) => {
+                        setCustomHexInput(e.target.value);
+                        setColorScheme('custom', e.target.value);
+                      }}
+                      className="sr-only"
+                    />
+                  </label>
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  Pick any custom brand or aesthetic tone.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Real-time Theme Accent Preview Strip */}
+          <div className="p-4 rounded-xl bg-surface-container-low border border-border/80 space-y-2.5">
+            <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-primary" />
+                Live Color Scheme Preview
+              </span>
+              <span className="text-[11px] font-mono">{activeHexColor}</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2.5 pt-1">
+              <button
+                type="button"
+                className="px-4 py-2 rounded-xl bg-primary text-primary-foreground font-bold text-xs shadow-sm hover:opacity-95 transition-opacity"
+              >
+                Primary Button
+              </button>
+              <button
+                type="button"
+                className="px-4 py-2 rounded-xl bg-primary/10 text-primary font-bold text-xs border border-primary/20 hover:bg-primary/20 transition-colors"
+              >
+                Subtle Accent
+              </button>
+              <span className="px-3 py-1 rounded-full bg-primary/15 text-primary font-bold text-[11px]">
+                Active Badge
+              </span>
+              <div className="px-3 py-1.5 rounded-lg border-2 border-primary bg-card text-xs font-medium text-foreground">
+                Focus Ring Highlight
+              </div>
             </div>
           </div>
         </div>
