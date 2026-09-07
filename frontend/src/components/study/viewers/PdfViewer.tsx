@@ -31,6 +31,10 @@ export interface PdfViewerProps {
   searchTerm?: string;
   /** Optional container ref to register text selection actions */
   selectionContainerRef?: React.RefObject<HTMLDivElement>;
+  /** Darker stage and tighter padding when the parent is in reader fullscreen. */
+  immersive?: boolean;
+  /** Double-click a page (without a text selection) to toggle fullscreen. */
+  onToggleFullscreen?: () => void;
 }
 
 export function PdfViewer({
@@ -41,7 +45,9 @@ export function PdfViewer({
   onPageChange,
   zoomLevel = 100,
   searchTerm = '',
-  selectionContainerRef
+  selectionContainerRef,
+  immersive = false,
+  onToggleFullscreen
 }: PdfViewerProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -287,6 +293,21 @@ export function PdfViewer({
     void renderCurrentPage();
   }, [renderCurrentPage]);
 
+  useEffect(() => {
+    if (rendering) return;
+    const layer = textLayerRef.current;
+    if (!layer) return;
+    const term = searchTerm.trim().toLowerCase();
+    layer.querySelectorAll('span').forEach((span) => {
+      const el = span as HTMLElement;
+      if (term && el.textContent?.toLowerCase().includes(term)) {
+        el.style.backgroundColor = 'rgba(0, 107, 74, 0.28)';
+      } else {
+        el.style.backgroundColor = '';
+      }
+    });
+  }, [searchTerm, rendering, currentPage]);
+
   // Handle keyboard page navigation when canvas is focused
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowRight' || e.key === 'PageDown') {
@@ -302,11 +323,22 @@ export function PdfViewer({
     }
   };
 
+  const handleStageDoubleClick = () => {
+    if (!onToggleFullscreen) return;
+    const selected = typeof window !== 'undefined' ? window.getSelection()?.toString() : '';
+    if (selected?.trim()) return;
+    onToggleFullscreen();
+  };
+
   if (loading) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-3 p-12 text-center bg-surface-container-low min-h-[360px]">
+      <div className={`flex-1 flex flex-col items-center justify-center gap-3 p-12 text-center min-h-[360px] ${
+        immersive ? 'bg-charcoal-dark' : 'bg-surface-container-low'
+      }`}>
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
-        <p className="text-xs font-semibold text-on-surface-variant animate-pulse">
+        <p className={`text-xs font-semibold animate-pulse ${
+          immersive ? 'text-white/60' : 'text-on-surface-variant'
+        }`}>
           Loading PDF document…
         </p>
       </div>
@@ -315,7 +347,9 @@ export function PdfViewer({
 
   if (error) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-3 p-8 text-center bg-surface-container-low min-h-[360px]">
+      <div className={`flex-1 flex flex-col items-center justify-center gap-3 p-8 text-center min-h-[360px] ${
+        immersive ? 'bg-charcoal-dark' : 'bg-surface-container-low'
+      }`}>
         <div className="w-12 h-12 rounded-2xl bg-destructive/10 text-destructive flex items-center justify-center">
           <AlertCircle className="w-6 h-6" />
         </div>
@@ -335,21 +369,36 @@ export function PdfViewer({
       }}
       tabIndex={0}
       onKeyDown={handleKeyDown}
-      className="flex-1 w-full h-full min-h-0 bg-surface-container-low overflow-auto custom-scrollbar flex flex-col items-center p-3 sm:p-5 outline-none focus:ring-1 focus:ring-primary/20 select-text"
+      className={`flex-1 w-full h-full min-h-0 overflow-auto custom-scrollbar flex flex-col items-center outline-none select-text ${
+        immersive
+          ? 'bg-charcoal-dark p-2 sm:p-4 focus:ring-0'
+          : 'bg-surface-container-low p-3 sm:p-5 focus:ring-1 focus:ring-primary/20'
+      }`}
       aria-label={`PDF Viewer: ${title}`}
     >
       {/* Page Stage */}
-      <div className="relative mx-auto flex flex-col items-center justify-start my-2 sm:my-3">
+      <div
+        className={`relative mx-auto flex flex-col items-center justify-start ${
+          immersive ? 'my-1 sm:my-2' : 'my-2 sm:my-3'
+        }`}
+        onDoubleClick={handleStageDoubleClick}
+      >
         {/* PDF Canvas */}
         <canvas
           ref={canvasRef}
-          className="shadow-notebook-card rounded-xl bg-white block transition-shadow duration-200 border border-outline-variant/60"
+          className={`bg-white block transition-shadow duration-200 ${
+            immersive
+              ? 'shadow-2xl rounded-sm'
+              : 'shadow-notebook-card rounded-xl border border-outline-variant/60'
+          }`}
         />
 
         {/* Transparent Text Layer for Selection & Highlights */}
         <div
           ref={textLayerRef}
-          className="textLayer absolute inset-0 pointer-events-auto select-text rounded-xl overflow-hidden"
+          className={`textLayer absolute inset-0 pointer-events-auto select-text overflow-hidden ${
+            immersive ? 'rounded-sm' : 'rounded-xl'
+          }`}
           style={{ transformOrigin: 'top left' }}
         />
 

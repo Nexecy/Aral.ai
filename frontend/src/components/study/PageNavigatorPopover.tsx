@@ -29,6 +29,8 @@ interface PageNavigatorPopoverProps {
   isPdf: boolean;
   extractedPages?: string[];
   sessionTitle?: string;
+  /** Fullscreen roots swallow body portals; pass the viewer element instead. */
+  portalTarget?: Element | null;
 }
 
 function PdfPageThumbnailItem({
@@ -216,7 +218,8 @@ export function PageNavigatorPopover({
   onSelectPage,
   fileUrl,
   isPdf,
-  extractedPages
+  extractedPages,
+  portalTarget
 }: PageNavigatorPopoverProps) {
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -355,7 +358,7 @@ export function PageNavigatorPopover({
   const pagesArray = Array.from({ length: totalPages }, (_, i) => i + 1);
 
   return (
-    <Portal>
+    <Portal container={portalTarget}>
       <div className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-screen h-screen z-[9999] flex items-center justify-center p-3 sm:p-6 bg-charcoal/50 backdrop-blur-md animate-in fade-in duration-150">
       <div
         ref={popoverRef}

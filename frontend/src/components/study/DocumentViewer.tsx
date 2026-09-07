@@ -15,7 +15,6 @@ import {
   Minus,
   Plus,
   Search,
-  Sparkles,
   UploadCloud
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -35,7 +34,11 @@ import { ImageViewer } from '@/components/study/viewers/ImageViewer';
 import { TextReader } from '@/components/study/viewers/TextReader';
 import { PdfViewer } from '@/components/study/viewers/PdfViewer';
 import { PageNavigatorPopover } from '@/components/study/PageNavigatorPopover';
+import { PdfFullscreenChrome } from '@/components/study/PdfFullscreenChrome';
 import { UploadProgressBar, UploadFileMeta } from '@/components/study/UploadProgressBar';
+import { useViewerFullscreen } from '@/hooks/useViewerFullscreen';
+import { useIdleChrome } from '@/hooks/useIdleChrome';
+import { isTypingTarget } from '@/hooks/useHotkeys';
 
 export const ACCEPTED_EXTENSIONS = [
   '.pdf', '.docx', '.doc', '.txt', '.md',
@@ -98,13 +101,33 @@ function DocumentViewerImpl({
   const [zoomLevel, setZoomLevel] = useState<number>(100);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [showSearch, setShowSearch] = useState<boolean>(false);
-  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [showPageNavigator, setShowPageNavigator] = useState<boolean>(false);
+  const [chromeHovering, setChromeHovering] = useState(false);
+
+  const viewerRootRef = useRef<HTMLDivElement | null>(null);
+  const { isFullscreen, toggle: toggleFullscreen, exit: exitFullscreen } = useViewerFullscreen(viewerRootRef);
 
   const [pdfTotalPages, setPdfTotalPages] = useState<number>(document?.page_count || 1);
 
   const readerRef = useRef<HTMLDivElement | null>(null);
   const { selection, clearSelection } = useTextSelection(readerRef, true);
+
+  const pdfImmersive = isFullscreen && viewFormat === 'original' && kind === 'pdf';
+  const zoomMin = isFullscreen ? 50 : 70;
+  const zoomMax = isFullscreen ? 250 : 160;
+  const chromePinned = chromeHovering || showSearch || showPageNavigator;
+  const { visible: chromeVisible, bump: bumpChrome, setVisible: setChromeVisible } = useIdleChrome(
+    pdfImmersive,
+    chromePinned
+  );
+
+  useEffect(() => {
+    if (isFullscreen) {
+      viewerRootRef.current?.focus({ preventScroll: true });
+      return;
+    }
+    setZoomLevel((z) => Math.min(160, Math.max(70, z)));
+  }, [isFullscreen]);
 
   // The file route is user-scoped, so the bytes are fetched with the auth header
   // and rendered from an object URL rather than pointing `src` at the API.
@@ -116,15 +139,6 @@ function DocumentViewerImpl({
     setCurrentPage(1);
     setZoomLevel(100);
   }, [document?.id, supportsOriginal]);
-
-  useEffect(() => {
-    if (!isFullscreen) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setIsFullscreen(false);
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [isFullscreen]);
 
   // Fetch once per document, mirroring the bytes so the session survives offline.
   const onFileFetchedRef = useRef(onFileFetched);
@@ -204,6 +218,130 @@ function DocumentViewerImpl({
     ? (pdfTotalPages || document?.page_count || 1)
     : pages.length;
   const activePage = pages[Math.min(currentPage, pages.length || 1) - 1] || '';
+  const showControls = viewFormat === 'text' || (viewFormat === 'original' && kind === 'pdf');
+
+  useEffect(() => {
+    if (!isFullscreen) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (isTypingTarget(e.target)) {
+        if (e.key === 'Escape' && showSearch) {
+          e.preventDefault();
+          e.stopPropagation();
+          setSearchTerm('');
+          setShowSearch(false);
+        }
+        return;
+      }
+
+      const stop = () => {
+        e.preventDefault();
+        e.stopPropagation();
+      };
+
+      const goPage = (page: number) => {
+        setCurrentPage(Math.min(totalPages, Math.max(1, page)));
+        bumpChrome();
+      };
+
+      if (e.key === 'Escape') {
+        stop();
+        if (showPageNavigator) {
+          setShowPageNavigator(false);
+          return;
+        }
+        if (showSearch) {
+          setSearchTerm('');
+          setShowSearch(false);
+          return;
+        }
+        void exitFullscreen();
+        return;
+      }
+
+      const findChord = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f';
+      if (findChord && (pdfImmersive || showControls)) {
+        stop();
+        setShowSearch(true);
+        bumpChrome();
+        return;
+      }
+
+      if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.code === 'Space') {
+        stop();
+        if (showControls && currentPage < totalPages) goPage(currentPage + 1);
+        else bumpChrome();
+        return;
+      }
+      if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        stop();
+        if (showControls && currentPage > 1) goPage(currentPage - 1);
+        else bumpChrome();
+        return;
+      }
+
+      if (!showControls) return;
+      if (e.key === 'Home') {
+        stop();
+        goPage(1);
+        return;
+      }
+      if (e.key === 'End') {
+        stop();
+        goPage(totalPages);
+        return;
+      }
+      if (e.key === '+' || e.key === '=' || e.code === 'NumpadAdd') {
+        stop();
+        setZoomLevel((z) => Math.min(zoomMax, z + 10));
+        bumpChrome();
+        return;
+      }
+      if (e.key === '-' || e.code === 'NumpadSubtract') {
+        stop();
+        setZoomLevel((z) => Math.max(zoomMin, z - 10));
+        bumpChrome();
+        return;
+      }
+      if (e.key === '0' && !e.ctrlKey && !e.metaKey) {
+        stop();
+        setZoomLevel(100);
+        bumpChrome();
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [
+    bumpChrome,
+    currentPage,
+    exitFullscreen,
+    isFullscreen,
+    pdfImmersive,
+    showControls,
+    showPageNavigator,
+    showSearch,
+    totalPages,
+    zoomMax,
+    zoomMin
+  ]);
+
+  useEffect(() => {
+    if (!pdfImmersive) return;
+    const el = viewerRootRef.current;
+    if (!el) return;
+
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      const dir = e.deltaY > 0 ? -10 : 10;
+      setZoomLevel((z) => Math.min(zoomMax, Math.max(zoomMin, z + dir)));
+      bumpChrome();
+    };
+
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [bumpChrome, pdfImmersive, zoomMax, zoomMin]);
 
   // ── Upload flow (shown when the session has no document yet) ────────────────
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -379,7 +517,6 @@ function DocumentViewerImpl({
 
   const displayFilename = document.filename || sessionTitle;
   const KindIcon = KIND_ICON[kind];
-  const showControls = viewFormat === 'text' || (viewFormat === 'original' && kind === 'pdf');
 
   const handleSelectionAction = (run?: (text: string) => void) => (text: string) => {
     run?.(text);
@@ -388,12 +525,32 @@ function DocumentViewerImpl({
 
   return (
     <div
-      className={`flex flex-col bg-surface-container-lowest border border-outline-variant rounded-3xl overflow-hidden relative transition-all duration-300 ${
-        isFullscreen ? 'fixed inset-4 z-50 shadow-2xl' : ''
+      ref={viewerRootRef}
+      tabIndex={-1}
+      role={isFullscreen ? 'dialog' : undefined}
+      aria-modal={isFullscreen ? true : undefined}
+      aria-label={isFullscreen ? `${displayFilename} fullscreen reader` : undefined}
+      onMouseMove={() => {
+        if (pdfImmersive) bumpChrome();
+      }}
+      onClick={(e) => {
+        if (!pdfImmersive) return;
+        if (typeof window !== 'undefined' && window.matchMedia('(hover: none)').matches) {
+          if ((e.target as HTMLElement).closest('[data-pdf-chrome]')) return;
+          setChromeVisible((v) => !v);
+        }
+      }}
+      className={`flex flex-col overflow-hidden relative transition-all duration-300 outline-none ${
+        isFullscreen
+          ? `fixed inset-0 z-[200] h-[100dvh] w-screen rounded-none border-0 shadow-none ${
+              pdfImmersive ? 'bg-charcoal-dark' : 'bg-surface-container-lowest'
+            }`
+          : 'bg-surface-container-lowest border border-outline-variant rounded-3xl'
       }`}
       style={isFullscreen ? undefined : { height: `${height}px` }}
     >
-      {/* Toolbar */}
+      {/* Toolbar — hidden in PDF immersive fullscreen (native-style overlay chrome instead) */}
+      {!pdfImmersive && (
       <div className="flex flex-wrap items-center justify-between px-4 py-3 sm:px-5 sm:py-3.5 border-b border-outline-variant bg-surface-container-lowest z-10 gap-2.5">
         <div className="flex items-center gap-3.5">
           <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 shadow-sm">
@@ -508,7 +665,7 @@ function DocumentViewerImpl({
 
               <div className="flex items-center gap-1 bg-surface-container rounded-full px-2 py-1 border border-outline-variant/60">
                 <button
-                  onClick={() => setZoomLevel((z) => Math.max(z - 10, 70))}
+                  onClick={() => setZoomLevel((z) => Math.max(z - 10, zoomMin))}
                   className="w-7 h-7 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-highest transition-colors"
                   title="Zoom out"
                 >
@@ -522,7 +679,7 @@ function DocumentViewerImpl({
                   {zoomLevel}%
                 </button>
                 <button
-                  onClick={() => setZoomLevel((z) => Math.min(z + 10, 160))}
+                  onClick={() => setZoomLevel((z) => Math.min(z + 10, zoomMax))}
                   className="w-7 h-7 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-highest transition-colors"
                   title="Zoom in"
                 >
@@ -545,14 +702,16 @@ function DocumentViewerImpl({
           )}
 
           <button
-            onClick={() => setIsFullscreen(!isFullscreen)}
+            onClick={() => void toggleFullscreen()}
             className="w-9 h-9 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container transition-colors"
-            title={isFullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen reader'}
+            title={isFullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen reader (or double-click the page)'}
+            aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
           >
             {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
           </button>
         </div>
       </div>
+      )}
 
       {/* ── Renderer ─────────────────────────────────────────────────────────── */}
 
@@ -590,6 +749,8 @@ function DocumentViewerImpl({
           zoomLevel={zoomLevel}
           searchTerm={searchTerm}
           selectionContainerRef={readerRef}
+          immersive={pdfImmersive}
+          onToggleFullscreen={() => void toggleFullscreen()}
         />
       )}
 
@@ -614,6 +775,36 @@ function DocumentViewerImpl({
         </div>
       )}
 
+      {pdfImmersive && (
+        <PdfFullscreenChrome
+          visible={chromeVisible}
+          filename={displayFilename}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          zoomLevel={zoomLevel}
+          showSearch={showSearch}
+          searchTerm={searchTerm}
+          canPrev={currentPage > 1}
+          canNext={currentPage < totalPages}
+          onPrev={() => setCurrentPage((p) => Math.max(1, p - 1))}
+          onNext={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+          onJumpPage={(page) => setCurrentPage(page)}
+          onZoomIn={() => setZoomLevel((z) => Math.min(zoomMax, z + 10))}
+          onZoomOut={() => setZoomLevel((z) => Math.max(zoomMin, z - 10))}
+          onZoomReset={() => setZoomLevel(100)}
+          onOpenThumbnails={() => setShowPageNavigator(true)}
+          onToggleSearch={() => {
+            setShowSearch((open) => {
+              if (open) setSearchTerm('');
+              return !open;
+            });
+          }}
+          onSearchTerm={setSearchTerm}
+          onExit={() => void exitFullscreen()}
+          onChromeHover={setChromeHovering}
+        />
+      )}
+
       <SelectionActionMenu
         selection={selection}
         onAskTutor={handleSelectionAction(onAskTutor)}
@@ -632,6 +823,7 @@ function DocumentViewerImpl({
         isPdf={viewFormat === 'original' && kind === 'pdf'}
         extractedPages={pages}
         sessionTitle={sessionTitle}
+        portalTarget={isFullscreen ? viewerRootRef.current : undefined}
       />
     </div>
   );

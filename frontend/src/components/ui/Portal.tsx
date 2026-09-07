@@ -5,9 +5,11 @@ import { createPortal } from 'react-dom';
 
 interface PortalProps {
   children: ReactNode;
+  /** Defaults to document.body. Pass a fullscreen root so dialogs stay visible. */
+  container?: Element | null;
 }
 
-export function Portal({ children }: PortalProps) {
+export function Portal({ children, container }: PortalProps) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -19,5 +21,5 @@ export function Portal({ children }: PortalProps) {
     return null;
   }
 
-  return createPortal(children, document.body);
+  return createPortal(children, container || document.body);
 }
