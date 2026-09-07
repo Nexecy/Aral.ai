@@ -271,16 +271,16 @@ function DashboardPage() {
 
       {/* Uploaded Documents Library Section */}
       <section className="space-y-4 pt-2">
-        <div className="flex items-center justify-between">
-          <div>
+        <div className="flex items-start sm:items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
             <h2 className="text-xl font-bold tracking-tight text-foreground">
               Your Reference Documents
             </h2>
-            <p className="text-xs text-muted-foreground mt-0.5">
+            <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
               Check, preview, rename, and manage all your uploaded study materials
             </p>
           </div>
-          <span className="text-xs font-semibold px-3 py-1 rounded-full bg-primary/10 text-primary border border-primary/20">
+          <span className="shrink-0 whitespace-nowrap text-xs font-semibold px-3 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 mt-1 sm:mt-0">
             {documents.length} {documents.length === 1 ? 'file' : 'files'}
           </span>
         </div>

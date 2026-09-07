@@ -709,12 +709,12 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
   const focusMinutes = Math.floor(sessionFocusSeconds / 60);
 
   const toolTabs = [
-    { id: 'split',      label: 'Split View', icon: Columns,  count: 'Live' },
-    { id: 'pdf',        label: 'PDF Viewer', icon: FileText, count: document?.page_count ? `${document.page_count}p` : 'Viewer' },
-    { id: 'notes',      label: 'Notes',      icon: BookOpen, count: notesGenerating ? '…' : notes ? 'Ready' : 'Pending' },
-    { id: 'flashcards', label: 'Flashcards', icon: Layers,   count: flashcards.length > 0 ? `${flashcards.length}` : '—' },
-    { id: 'quiz',       label: 'Quiz',       icon: Award,    count: quiz_attempts.length ? `${quiz_attempts[0].score}%` : '3 Modes' },
-    { id: 'chat',       label: 'AI Tutor',   icon: Bot,      count: 'Live' }
+    { id: 'split',      label: 'Split View', shortLabel: 'Split', icon: Columns,  count: 'Live' },
+    { id: 'pdf',        label: 'PDF Viewer', shortLabel: 'PDF',   icon: FileText, count: document?.page_count ? `${document.page_count}p` : 'Viewer' },
+    { id: 'notes',      label: 'Notes',      shortLabel: 'Notes', icon: BookOpen, count: notesGenerating ? '…' : notes ? 'Ready' : 'Pending' },
+    { id: 'flashcards', label: 'Flashcards', shortLabel: 'Cards', icon: Layers,   count: flashcards.length > 0 ? `${flashcards.length}` : '—' },
+    { id: 'quiz',       label: 'Quiz',       shortLabel: 'Quiz',  icon: Award,    count: quiz_attempts.length ? `${quiz_attempts[0].score}%` : '3 Modes' },
+    { id: 'chat',       label: 'AI Tutor',   shortLabel: 'Tutor', icon: Bot,      count: 'Live' }
   ];
 
   const chatPanel = (extra?: { onDetach?: () => void; footerSlot?: React.ReactNode }) => (
@@ -978,22 +978,22 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
       )}
 
       {/* ── HEADER ───────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-surface-container-lowest p-5 sm:p-7 rounded-2xl border border-outline-variant">
-        <div>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-surface-container-lowest p-4 sm:p-6 lg:p-7 rounded-2xl border border-outline-variant">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 text-xs text-on-surface-variant mb-1.5 font-medium">
-            <Link href="/" className="hover:text-primary transition-colors">Library</Link>
-            <ChevronRight className="w-3.5 h-3.5" />
-            <span className="font-semibold text-on-surface truncate max-w-xs sm:max-w-md">{session.title}</span>
+            <Link href="/" className="hover:text-primary transition-colors shrink-0">Library</Link>
+            <ChevronRight className="w-3.5 h-3.5 shrink-0" />
+            <span className="font-semibold text-on-surface truncate max-w-[200px] sm:max-w-md">{session.title}</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-on-surface">
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight text-on-surface break-words">
             {session.title}
           </h1>
         </div>
 
         <div className="flex items-center gap-2 shrink-0 flex-wrap">
           {isRunning && (
-            <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold animate-pulse">
-              <Timer className="w-3.5 h-3.5" />
+            <div className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold animate-pulse">
+              <Timer className="w-3.5 h-3.5 shrink-0" />
               <span className="font-mono tracking-wider">{formattedTime}</span>
             </div>
           )}
@@ -1001,7 +1001,7 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
           <button
             onClick={() => setShowShortcuts(true)}
             title="Keyboard shortcuts"
-            className="w-10 h-10 rounded-full flex items-center justify-center border border-outline-variant text-on-surface-variant hover:text-primary hover:border-primary/40 transition-all"
+            className="hidden sm:flex w-10 h-10 rounded-full items-center justify-center border border-outline-variant text-on-surface-variant hover:text-primary hover:border-primary/40 transition-all"
           >
             <Keyboard className="w-4 h-4" />
           </button>
@@ -1009,7 +1009,7 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
           <button
             onClick={cycleFontSize}
             title={`Font size: ${fontSize.toUpperCase()} (${fontSize === 'sm' ? '90%' : fontSize === 'lg' ? '112%' : fontSize === 'xl' ? '125%' : '100%'} · Click to change)`}
-            className="h-10 px-3.5 rounded-full flex items-center gap-1.5 border border-outline-variant text-on-surface-variant hover:text-primary hover:border-primary/40 transition-all text-xs font-bold"
+            className="h-10 px-3 sm:px-3.5 rounded-full flex items-center gap-1.5 border border-outline-variant text-on-surface-variant hover:text-primary hover:border-primary/40 transition-all text-xs font-bold"
           >
             <Type className="w-3.5 h-3.5" />
             <span className="uppercase text-[11px] font-mono">{fontSize}</span>
@@ -1019,7 +1019,7 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
             <button
               onClick={pauseTimer}
               title="Pause focus timer (Space)"
-              className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-surface-container-lowest hover:bg-surface-container border border-outline-variant text-on-surface text-xs font-semibold transition-all"
+              className="flex items-center gap-1.5 sm:gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-full bg-surface-container-lowest hover:bg-surface-container border border-outline-variant text-on-surface text-xs font-semibold transition-all"
             >
               <Pause className="w-3.5 h-3.5 text-primary" />
               <span>Pause Focus</span>
@@ -1028,7 +1028,7 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
             <button
               onClick={handleStartFocus}
               title="Start focus timer (Space)"
-              className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-primary text-on-primary text-xs font-bold shadow-sm hover:bg-primary-container transition-all active:scale-95"
+              className="flex items-center gap-1.5 sm:gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-full bg-primary text-on-primary text-xs font-bold shadow-sm hover:bg-primary-container transition-all active:scale-95"
             >
               <Play className="w-3.5 h-3.5 fill-current" />
               <span>Start Focus</span>
@@ -1037,17 +1037,17 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
 
           <button
             onClick={() => { setExitError(null); setShowExitDialog(true); }}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-outline-variant text-on-surface-variant hover:text-destructive hover:border-destructive/40 text-xs font-semibold transition-all"
+            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-full border border-outline-variant text-on-surface-variant hover:text-destructive hover:border-destructive/40 text-xs font-semibold transition-all"
             title="End study session"
           >
             <LogOut className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Exit</span>
+            <span>Exit</span>
           </button>
         </div>
       </div>
 
       {/* ── MODE SELECTOR TOOLBAR ────────────────────────────────────────────── */}
-      <div className="flex items-center gap-3 bg-surface-container-lowest p-2.5 rounded-2xl overflow-x-auto no-scrollbar border border-outline-variant">
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 sm:gap-2 p-1.5 sm:p-2 bg-surface-container-lowest rounded-2xl border border-outline-variant shadow-xs">
         {toolTabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = viewMode === tab.id;
@@ -1055,15 +1055,18 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
             <button
               key={tab.id}
               onClick={() => setViewMode(tab.id as ViewMode)}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all whitespace-nowrap ${
+              className={`flex items-center justify-center gap-1 sm:gap-1.5 lg:gap-2 px-2 sm:px-2.5 lg:px-3 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all min-w-0 ${
                 isActive
-                  ? 'bg-primary text-on-primary shadow-sm hover:scale-[1.01]'
+                  ? 'bg-primary text-on-primary shadow-sm'
                   : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container'
               }`}
             >
-              <Icon className="w-4 h-4" />
-              <span>{tab.label}</span>
-              <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold ml-1 ${
+              <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+              <span className="truncate">
+                <span className="inline xl:hidden">{tab.shortLabel}</span>
+                <span className="hidden xl:inline">{tab.label}</span>
+              </span>
+              <span className={`hidden md:inline-block px-1.5 py-0.5 rounded text-[10px] uppercase font-bold shrink-0 ml-0.5 ${
                 isActive ? 'bg-on-primary/20 text-on-primary' : 'bg-surface-container-highest text-on-surface-variant'
               }`}>
                 {tab.count}
@@ -1215,9 +1218,9 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
       {/* VIEW MODE 2: FULL NOTES REVIEWER */}
       {openedViews.notes && (
       <div className={`${viewMode === 'notes' ? 'block' : 'hidden'} space-y-4 animate-in fade-in`}>
-        <div className="flex items-center justify-between p-3 rounded-xl bg-card border border-border text-xs">
-          <span className="font-semibold text-muted-foreground">Viewing Full Notes Reviewer Editor</span>
-          <button onClick={() => setViewMode('split')} className="font-bold text-primary hover:underline flex items-center gap-1">
+        <div className="flex items-center justify-between gap-2 p-3 rounded-xl bg-card border border-border text-xs">
+          <span className="font-semibold text-muted-foreground min-w-0 truncate">Viewing Full Notes Reviewer Editor</span>
+          <button onClick={() => setViewMode('split')} className="font-bold text-primary hover:underline flex items-center gap-1 shrink-0">
             <Columns className="w-3.5 h-3.5" />
             <span>Back to Split View</span>
           </button>
@@ -1235,9 +1238,9 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
       {/* VIEW MODE 3: FULL FLASHCARD DECK */}
       {openedViews.flashcards && (
       <div className={`${viewMode === 'flashcards' ? 'block' : 'hidden'} space-y-4 animate-in fade-in`}>
-        <div className="flex items-center justify-between p-3 rounded-xl bg-card border border-border text-xs">
-          <span className="font-semibold text-muted-foreground">Viewing Active Recall Flashcard Arena</span>
-          <button onClick={() => setViewMode('split')} className="font-bold text-primary hover:underline flex items-center gap-1">
+        <div className="flex items-center justify-between gap-2 p-3 rounded-xl bg-card border border-border text-xs">
+          <span className="font-semibold text-muted-foreground min-w-0 truncate">Viewing Active Recall Flashcard Arena</span>
+          <button onClick={() => setViewMode('split')} className="font-bold text-primary hover:underline flex items-center gap-1 shrink-0">
             <Columns className="w-3.5 h-3.5" />
             <span>Back to Split View</span>
           </button>
@@ -1257,9 +1260,9 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
       {/* VIEW MODE 4: FULL QUIZ ARENA */}
       {openedViews.quiz && (
       <div className={`${viewMode === 'quiz' ? 'block' : 'hidden'} space-y-4 animate-in fade-in`}>
-        <div className="flex items-center justify-between p-3 rounded-xl bg-card border border-border text-xs">
-          <span className="font-semibold text-muted-foreground">Viewing Multi-Mode Quiz Arena</span>
-          <button onClick={() => setViewMode('split')} className="font-bold text-primary hover:underline flex items-center gap-1">
+        <div className="flex items-center justify-between gap-2 p-3 rounded-xl bg-card border border-border text-xs">
+          <span className="font-semibold text-muted-foreground min-w-0 truncate">Viewing Multi-Mode Quiz Arena</span>
+          <button onClick={() => setViewMode('split')} className="font-bold text-primary hover:underline flex items-center gap-1 shrink-0">
             <Columns className="w-3.5 h-3.5" />
             <span>Back to Split View</span>
           </button>
@@ -1275,9 +1278,9 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
       {/* VIEW MODE 5: FULL AI TUTOR */}
       {openedViews.chat && (
       <div className={`${viewMode === 'chat' ? 'block' : 'hidden'} space-y-4 animate-in fade-in`}>
-        <div className="flex items-center justify-between p-3 rounded-xl bg-card border border-border text-xs">
-          <span className="font-semibold text-muted-foreground">Viewing Dedicated AI Study Tutor</span>
-          <button onClick={() => setViewMode('split')} className="font-bold text-primary hover:underline flex items-center gap-1">
+        <div className="flex items-center justify-between gap-2 p-3 rounded-xl bg-card border border-border text-xs">
+          <span className="font-semibold text-muted-foreground min-w-0 truncate">Viewing Dedicated AI Study Tutor</span>
+          <button onClick={() => setViewMode('split')} className="font-bold text-primary hover:underline flex items-center gap-1 shrink-0">
             <Columns className="w-3.5 h-3.5" />
             <span>Back to Split View</span>
           </button>
