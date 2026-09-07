@@ -34,9 +34,14 @@ export function AuthForm({ mode }: AuthFormProps) {
   const isSignup = mode === 'signup';
   const googleBtnRef = useRef<HTMLDivElement>(null);
 
-  const handleGoogleSuccess = async (accessToken: string) => {
+  useEffect(() => {
+    // Prefetch main dashboard route to eliminate post-login transition delay
+    router.prefetch('/');
+  }, [router]);
+
+  const handleGoogleSuccess = async (accessToken: string, initialUser?: any) => {
     try {
-      await establishSession(accessToken);
+      await establishSession(accessToken, initialUser);
       router.replace('/');
     } catch (err: any) {
       setError(err?.message || 'Failed to complete Google sign-in.');

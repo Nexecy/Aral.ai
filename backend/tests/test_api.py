@@ -122,12 +122,29 @@ def test_signup_and_login_issues_a_scoped_token():
     again = client.post("/api/auth/login", json={"email": email, "password": password})
     assert again.status_code == 200
     assert again.json()["access_token"]
+    login_user = again.json()["user"]
+    assert login_user["email"] == email
+    assert "display_name" in login_user
+    assert "has_supabase" in login_user
+    assert "has_gemini" in login_user
+    assert "gemini_model" in login_user
 
     clash = client.post("/api/auth/signup", json={"email": email, "password": password})
     assert clash.status_code == 409
 
     wrong = client.post("/api/auth/login", json={"email": email, "password": "wrongpass"})
     assert wrong.status_code == 401
+
+
+def test_cors_preflight_max_age_caching():
+    headers = {
+        "Origin": "http://localhost:3000",
+        "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers": "content-type,authorization",
+    }
+    response = client.options("/api/auth/login", headers=headers)
+    assert response.status_code == 200
+    assert response.headers.get("access-control-max-age") == "86400"
 
 
 def test_unverified_email_cannot_use_ai_tools():

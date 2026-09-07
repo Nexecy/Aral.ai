@@ -42,7 +42,7 @@ declare global {
  * Initialize Google Identity Services on the page.
  */
 export function initGoogleIdentity(
-  onSuccess: (accessToken: string) => Promise<void>,
+  onSuccess: (accessToken: string, user?: any) => Promise<void>,
   onError: (errMsg: string) => void
 ) {
   if (typeof window === 'undefined' || !window.google?.accounts?.id) {
@@ -61,7 +61,7 @@ export function initGoogleIdentity(
         try {
           const session = await api.loginWithGoogle(response.credential);
           if (session.access_token) {
-            await onSuccess(session.access_token);
+            await onSuccess(session.access_token, session.user);
           } else {
             onError('Could not create an active session.');
           }

@@ -167,6 +167,13 @@ class ApiClient {
     return promise;
   }
 
+  /**
+   * Directly seed in-memory cache with known data (e.g. login user profile) to eliminate redundant network roundtrips.
+   */
+  seedCache<T>(endpoint: string, data: T, ttlMs = 20000): void {
+    this.cache.set(endpoint, { data, timestamp: Date.now(), ttl: ttlMs });
+  }
+
   // ---------------------------------------------------------------------------
   // Auth & System Status
   // ---------------------------------------------------------------------------
@@ -651,6 +658,19 @@ class ApiClient {
 
   async getDashboardSummary(): Promise<DashboardSummary> {
     return this.cachedRequest<DashboardSummary>('/dashboard/summary', 15000);
+  }
+
+  /**
+   * Run initial dashboard data queries concurrently using Promise.all
+   * to eliminate sequential network blocking upon post-login onboarding.
+   */
+  async prefetchDashboardData(): Promise<[DashboardSummary, Session[], Exam[], Document[]]> {
+    return Promise.all([
+      this.getDashboardSummary(),
+      this.getSessions(),
+      this.getExams(),
+      this.getDocuments()
+    ]);
   }
 
   // ---------------------------------------------------------------------------

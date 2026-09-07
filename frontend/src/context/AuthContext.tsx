@@ -26,7 +26,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<AuthResult>;
   signup: (email: string, password: string) => Promise<AuthResult>;
   logout: () => void;
-  establishSession: (accessToken: string) => Promise<void>;
+  establishSession: (accessToken: string, initialUser?: any) => Promise<void>;
   forgotPassword: (email: string) => Promise<{ message: string }>;
   resendConfirmation: (email: string) => Promise<{ message: string }>;
   resetPassword: (password: string) => Promise<{ message: string }>;
@@ -79,26 +79,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState<boolean>(true);
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
 
-  const applySession = useCallback(async (accessToken: string | null) => {
-    if (!accessToken) {
-      persistToken(null);
-      persistUser(null);
-      setToken(null);
-      setUser(null);
-      return;
-    }
-    persistToken(accessToken);
-    setToken(accessToken);
-    const me = await api.getMe();
-    const nextUser = userFromMe(me);
-    persistUser(nextUser);
-    setUser(nextUser);
-    setSystemStatus({
-      has_supabase: me.has_supabase,
-      has_gemini: me.has_gemini,
-      gemini_model: me.gemini_model
-    });
-  }, []);
+  const applySession = useCallback(
+    async (
+      accessToken: string | null,
+      initialUser?: (User & { has_supabase?: boolean; has_gemini?: boolean; gemini_model?: string }) | null
+    ) => {
+      if (!accessToken) {
+        persistToken(null);
+        persistUser(null);
+        setToken(null);
+        setUser(null);
+        setSystemStatus(null);
+        return;
+      }
+      persistToken(accessToken);
+      setToken(accessToken);
+
+      let me: User & { has_supabase?: boolean; has_gemini?: boolean; gemini_model?: string };
+      if (initialUser && initialUser.id && initialUser.email) {
+        me = initialUser;
+        // Direct cache seed eliminates /api/auth/me roundtrip entirely
+        api.seedCache('/auth/me', me);
+      } else {
+        me = await api.getMe();
+      }
+
+      const nextUser = userFromMe(me);
+      persistUser(nextUser);
+      setUser(nextUser);
+      if (me.has_supabase !== undefined || me.has_gemini !== undefined || me.gemini_model !== undefined) {
+        setSystemStatus({
+          has_supabase: Boolean(me.has_supabase),
+          has_gemini: Boolean(me.has_gemini),
+          gemini_model: me.gemini_model || ''
+        });
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     let active = true;
@@ -114,7 +132,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
           if (params.code) {
             const session = await api.exchangeCode(params.code);
-            if (session.access_token && active) await applySession(session.access_token);
+            if (session.access_token && active) await applySession(session.access_token, session.user);
             clearAuthRedirectFromUrl();
             if (params.type === 'recovery' && !window.location.pathname.includes('reset-password')) {
               window.location.replace('/reset-password/');
@@ -180,7 +198,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (email: string, password: string) => {
     const session = await api.login(email, password);
-    if (session.access_token) await applySession(session.access_token);
+    if (session.access_token) {
+      await applySession(session.access_token, session.user);
+      // Pre-warm dashboard queries concurrently in the background without blocking transition
+      void api.prefetchDashboardData();
+    }
     const emailVerified = session.email_verified !== false && session.user?.email_verified !== false;
     return {
       requiresConfirmation: session.requires_confirmation,
@@ -191,7 +213,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signup = async (email: string, password: string) => {
     const session = await api.signup(email, password);
-    if (session.access_token) await applySession(session.access_token);
+    if (session.access_token) {
+      await applySession(session.access_token, session.user);
+      void api.prefetchDashboardData();
+    }
     const emailVerified = session.email_verified !== false && session.user?.email_verified !== false;
     return {
       requiresConfirmation: session.requires_confirmation,
@@ -208,8 +233,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const establishSession = useCallback(
-    async (accessToken: string) => {
-      await applySession(accessToken);
+    async (accessToken: string, initialUser?: any) => {
+      await applySession(accessToken, initialUser);
+      void api.prefetchDashboardData();
     },
     [applySession]
   );

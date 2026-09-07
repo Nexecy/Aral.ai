@@ -41,14 +41,27 @@ def _me_payload(user: Dict[str, Any], profile: Optional[Dict[str, Any]] = None) 
     }
 
 
+async def _enrich_session_user(session: Dict[str, Any]) -> Dict[str, Any]:
+    user = session.get("user") or {}
+    if user.get("id"):
+        try:
+            profile = await db_service.get_profile(user["id"])
+        except Exception:
+            profile = {}
+        session["user"] = _me_payload(user, profile)
+    return session
+
+
 @router.post("/signup", response_model=AuthSessionResponse)
 async def signup(payload: AuthCredentials):
-    return auth_service.signup(payload.email, payload.password)
+    session = auth_service.signup(payload.email, payload.password)
+    return await _enrich_session_user(session)
 
 
 @router.post("/login", response_model=AuthSessionResponse)
 async def login(payload: AuthCredentials):
-    return auth_service.login(payload.email, payload.password)
+    session = auth_service.login(payload.email, payload.password)
+    return await _enrich_session_user(session)
 
 
 @router.post("/forgot-password")
@@ -78,12 +91,14 @@ async def reset_password(
 
 @router.post("/exchange-code", response_model=AuthSessionResponse)
 async def exchange_code(payload: AuthCodeExchange):
-    return auth_service.exchange_code(payload.code)
+    session = auth_service.exchange_code(payload.code)
+    return await _enrich_session_user(session)
 
 
 @router.post("/google", response_model=AuthSessionResponse)
 async def login_google(payload: AuthGoogleToken):
-    return auth_service.login_with_google(payload.credential)
+    session = auth_service.login_with_google(payload.credential)
+    return await _enrich_session_user(session)
 
 
 
