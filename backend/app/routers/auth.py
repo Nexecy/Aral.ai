@@ -13,6 +13,7 @@ from app.models.schemas import (
     AuthGoogleToken,
     AuthPasswordChange,
     AuthPasswordUpdate,
+    AuthRefreshTokenRequest,
     AuthSessionResponse,
     ProfileUpdate,
 )
@@ -100,6 +101,11 @@ async def login_google(payload: AuthGoogleToken):
     session = auth_service.login_with_google(payload.credential)
     return await _enrich_session_user(session)
 
+
+@router.post("/refresh", response_model=AuthSessionResponse)
+async def refresh_session(payload: AuthRefreshTokenRequest):
+    session = auth_service.refresh_session(payload.refresh_token)
+    return await _enrich_session_user(session)
 
 
 @router.get("/me")

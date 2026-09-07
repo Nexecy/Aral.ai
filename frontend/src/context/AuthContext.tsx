@@ -37,10 +37,17 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-function persistToken(token: string | null) {
+function persistToken(token: string | null, refreshToken?: string | null) {
   if (typeof window === 'undefined') return;
   if (token) localStorage.setItem('aral_auth_token', token);
   else localStorage.removeItem('aral_auth_token');
+
+  if (refreshToken !== undefined) {
+    if (refreshToken) localStorage.setItem('aral_refresh_token', refreshToken);
+    else localStorage.removeItem('aral_refresh_token');
+  } else if (!token) {
+    localStorage.removeItem('aral_refresh_token');
+  }
 }
 
 function persistUser(user: User | null) {
@@ -82,17 +89,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const applySession = useCallback(
     async (
       accessToken: string | null,
-      initialUser?: (User & { has_supabase?: boolean; has_gemini?: boolean; gemini_model?: string }) | null
+      initialUser?: (User & { has_supabase?: boolean; has_gemini?: boolean; gemini_model?: string }) | null,
+      refreshToken?: string | null
     ) => {
       if (!accessToken) {
-        persistToken(null);
+        persistToken(null, null);
         persistUser(null);
         setToken(null);
         setUser(null);
         setSystemStatus(null);
         return;
       }
-      persistToken(accessToken);
+      persistToken(accessToken, refreshToken);
       setToken(accessToken);
 
       let me: User & { has_supabase?: boolean; has_gemini?: boolean; gemini_model?: string };
@@ -132,7 +140,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
           if (params.code) {
             const session = await api.exchangeCode(params.code);
-            if (session.access_token && active) await applySession(session.access_token, session.user);
+            if (session.access_token && active) await applySession(session.access_token, session.user, session.refresh_token);
             clearAuthRedirectFromUrl();
             if (params.type === 'recovery' && !window.location.pathname.includes('reset-password')) {
               window.location.replace('/reset-password/');
@@ -154,7 +162,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         const savedToken = localStorage.getItem('aral_auth_token');
-        if (!savedToken) {
+        const savedRefreshToken = localStorage.getItem('aral_refresh_token');
+        if (!savedToken && !savedRefreshToken) {
           if (active) {
             persistUser(null);
             setUser(null);
@@ -171,11 +180,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         if (active) {
-          await applySession(savedToken);
+          try {
+            await applySession(savedToken);
+          } catch {
+            if (savedRefreshToken) {
+              try {
+                const refreshed = await api.refreshSession(savedRefreshToken);
+                if (refreshed.access_token && active) {
+                  await applySession(refreshed.access_token, refreshed.user, refreshed.refresh_token);
+                  return;
+                }
+              } catch {
+                // fall through to clear
+              }
+            }
+            throw new Error('Session expired');
+          }
         }
       } catch {
         if (active) {
-          persistToken(null);
+          persistToken(null, null);
           persistUser(null);
           setToken(null);
           setUser(null);
@@ -199,7 +223,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (email: string, password: string) => {
     const session = await api.login(email, password);
     if (session.access_token) {
-      await applySession(session.access_token, session.user);
+      await applySession(session.access_token, session.user, session.refresh_token);
       // Pre-warm dashboard queries concurrently in the background without blocking transition
       void api.prefetchDashboardData();
     }
@@ -214,7 +238,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signup = async (email: string, password: string) => {
     const session = await api.signup(email, password);
     if (session.access_token) {
-      await applySession(session.access_token, session.user);
+      await applySession(session.access_token, session.user, session.refresh_token);
       void api.prefetchDashboardData();
     }
     const emailVerified = session.email_verified !== false && session.user?.email_verified !== false;
@@ -226,15 +250,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = () => {
-    persistToken(null);
+    persistToken(null, null);
     persistUser(null);
     setToken(null);
     setUser(null);
   };
 
   const establishSession = useCallback(
-    async (accessToken: string, initialUser?: any) => {
-      await applySession(accessToken, initialUser);
+    async (accessToken: string, initialUser?: any, refreshToken?: string | null) => {
+      await applySession(accessToken, initialUser, refreshToken);
       void api.prefetchDashboardData();
     },
     [applySession]

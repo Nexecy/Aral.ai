@@ -78,18 +78,21 @@ def _session(
     user: Dict[str, Any],
     token: Optional[str],
     *,
+    refresh_token: Optional[str] = None,
     requires_confirmation: bool = False,
     message: Optional[str] = None,
 ) -> Dict[str, Any]:
     verified = bool(user.get("email_verified", True))
     return {
         "access_token": token,
+        "refresh_token": refresh_token,
         "token_type": "bearer",
         "user": user,
         "requires_confirmation": requires_confirmation,
         "email_verified": verified,
         "message": message,
     }
+
 
 
 def issue_access_token(user_id: str, email: str, email_verified: bool = True) -> str:
@@ -212,13 +215,18 @@ def signup(email: str, password: str) -> Dict[str, Any]:
             _remember_password(email, password, user_id)
             if session and session.access_token:
                 profile = _profile(user_id, user.email or email, True)
-                return _session(profile, session.access_token)
+                return _session(
+                    profile,
+                    session.access_token,
+                    refresh_token=getattr(session, "refresh_token", None),
+                )
 
             token = issue_access_token(user_id, email, email_verified=False)
             profile = _profile(user_id, user.email or email, False)
             return _session(
                 profile,
                 token,
+                refresh_token=token,
                 requires_confirmation=True,
                 message="You're in. Confirm your email to unlock AI study tools.",
             )
@@ -231,7 +239,7 @@ def signup(email: str, password: str) -> Dict[str, Any]:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
     user, token = _signup_local(email, password)
-    return _session(user, token)
+    return _session(user, token, refresh_token=token)
 
 
 def login(email: str, password: str) -> Dict[str, Any]:
@@ -249,7 +257,11 @@ def login(email: str, password: str) -> Dict[str, Any]:
                     detail="Incorrect email or password.",
                 )
             profile = _profile(str(user.id), user.email or email, True)
-            return _session(profile, session.access_token)
+            return _session(
+                profile,
+                session.access_token,
+                refresh_token=getattr(session, "refresh_token", None),
+            )
         except HTTPException:
             raise
         except Exception as exc:
@@ -267,6 +279,7 @@ def login(email: str, password: str) -> Dict[str, Any]:
                 return _session(
                     profile,
                     token,
+                    refresh_token=token,
                     requires_confirmation=True,
                     message="You're signed in with limited access. Confirm your email to unlock AI study tools.",
                 )
@@ -276,7 +289,7 @@ def login(email: str, password: str) -> Dict[str, Any]:
             )
 
     user, token = _login_local(email, password)
-    return _session(user, token)
+    return _session(user, token, refresh_token=token)
 
 
 def forgot_password(email: str) -> Dict[str, Any]:
@@ -360,7 +373,11 @@ def exchange_code(code: str) -> Dict[str, Any]:
                 detail="That confirmation link is invalid or has expired.",
             )
         profile = _profile(str(user.id), user.email or "signed-in", True)
-        return _session(profile, session.access_token)
+        return _session(
+            profile,
+            session.access_token,
+            refresh_token=getattr(session, "refresh_token", None),
+        )
     except HTTPException:
         raise
     except Exception as exc:
@@ -459,7 +476,11 @@ def login_with_google(credential: str) -> Dict[str, Any]:
             user_id = str(user.id)
             email = user.email or "google-user"
             profile = _profile(user_id, email, True)
-            return _session(profile, session.access_token)
+            return _session(
+                profile,
+                session.access_token,
+                refresh_token=getattr(session, "refresh_token", None),
+            )
         except HTTPException:
             raise
         except Exception as exc:
@@ -484,10 +505,77 @@ def login_with_google(credential: str) -> Dict[str, Any]:
             }
             _save_local_users(users)
         profile = _profile(user_id, email, True)
-        return _session(profile, issue_access_token(user_id, email, email_verified=True))
+        token = issue_access_token(user_id, email, email_verified=True)
+        return _session(profile, token, refresh_token=token)
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid Google credential token.",
         )
+
+
+def refresh_session(refresh_token_str: str) -> Dict[str, Any]:
+    if not refresh_token_str or not refresh_token_str.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Missing refresh token.",
+        )
+    refresh_token_str = refresh_token_str.strip()
+    client = None if _use_local_auth() else _supabase_client()
+    if client:
+        try:
+            res = client.auth.refresh_session(refresh_token_str)
+            user = res.user
+            session = res.session
+            if not user or not session or not session.access_token:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid or expired refresh token.",
+                )
+            profile = _profile(str(user.id), user.email or "signed-in", True)
+            return _session(
+                profile,
+                session.access_token,
+                refresh_token=getattr(session, "refresh_token", None),
+            )
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"Token refresh failed: {_supabase_error_message(exc)}",
+            )
+
+    secrets = []
+    if settings.SUPABASE_JWT_SECRET:
+        secrets.append(settings.SUPABASE_JWT_SECRET)
+    secrets.append(LOCAL_JWT_SECRET)
+
+    payload = None
+    for secret in secrets:
+        try:
+            payload = jwt.decode(
+                refresh_token_str,
+                secret,
+                algorithms=["HS256"],
+                options={"verify_exp": False, "verify_aud": False},
+            )
+            break
+        except Exception:
+            continue
+
+    if payload:
+        user_id = payload.get("sub") or payload.get("id")
+        email = payload.get("email") or "local-account"
+        verified = bool(payload.get("email_verified", True))
+        if user_id:
+            new_token = issue_access_token(str(user_id), email, email_verified=verified)
+            profile = _profile(str(user_id), email, verified)
+            return _session(profile, new_token, refresh_token=new_token)
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or expired refresh token.",
+    )
+
 

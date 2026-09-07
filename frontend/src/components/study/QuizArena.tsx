@@ -45,6 +45,7 @@ export function QuizArena({
     initialAttempts && initialAttempts.length > 0 ? initialAttempts[0] : null
   );
   const [matchingSelections, setMatchingSelections] = useState<Record<string, string>>({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const quizTypes = [
     {
@@ -106,9 +107,11 @@ export function QuizArena({
   const handleSubmitQuiz = async () => {
     if (questions.length === 0) return;
     setSubmitting(true);
+    setSubmitError(null);
     try {
       const attempt = await api.submitQuiz(sessionId, selectedType, questions, userAnswers);
       setCurrentAttempt(attempt);
+      setSubmitError(null);
       
       if (attempt.score >= 70) {
         sound.playSuccessFanfare();
@@ -132,7 +135,15 @@ export function QuizArena({
         href: `/session/${sessionId}/`
       });
     } catch (e: any) {
-      alert(`Submission failed: ${e.message}`);
+      const msg = e.message || 'Submission failed. Please try again.';
+      setSubmitError(msg);
+      addNotification({
+        id: `quiz-err-${Date.now()}`,
+        kind: 'quiz',
+        title: 'Quiz submission error',
+        body: msg,
+        href: `/session/${sessionId}/`
+      });
     } finally {
       setSubmitting(false);
     }
@@ -390,6 +401,20 @@ export function QuizArena({
               </div>
             ))}
           </div>
+
+          {submitError && (
+            <div className="p-3.5 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs flex items-center justify-between gap-3">
+              <span>{submitError}</span>
+              <button
+                type="button"
+                onClick={handleSubmitQuiz}
+                disabled={submitting}
+                className="px-3 py-1 bg-destructive text-destructive-foreground rounded-lg font-medium hover:opacity-90 transition-opacity whitespace-nowrap text-xs"
+              >
+                Retry
+              </button>
+            </div>
+          )}
 
           <div className="pt-4 flex justify-end">
             <button

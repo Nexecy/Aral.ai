@@ -22,11 +22,17 @@ class AuthCredentials(BaseModel):
 
 class AuthSessionResponse(BaseModel):
     access_token: Optional[str] = None
+    refresh_token: Optional[str] = None
     token_type: str = "bearer"
     user: Dict[str, Any]
     requires_confirmation: bool = False
     email_verified: bool = True
     message: Optional[str] = None
+
+
+class AuthRefreshTokenRequest(BaseModel):
+    refresh_token: str = Field(..., min_length=1)
+
 
 
 class AuthEmailRequest(BaseModel):

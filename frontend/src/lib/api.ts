@@ -37,6 +37,52 @@ class ApiClient {
     return localStorage.getItem('aral_auth_token');
   }
 
+  private getRefreshToken(): string | null {
+    if (typeof window === 'undefined') return null;
+    return localStorage.getItem('aral_refresh_token');
+  }
+
+  private refreshPromise: Promise<string | null> | null = null;
+
+  private async refreshAccessToken(): Promise<string | null> {
+    if (this.refreshPromise) {
+      return this.refreshPromise;
+    }
+
+    this.refreshPromise = (async () => {
+      try {
+        const refreshToken = this.getRefreshToken();
+        if (!refreshToken) return null;
+
+        const res = await fetch(`${API_BASE}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: refreshToken })
+        });
+
+        if (!res.ok) {
+          return null;
+        }
+
+        const data: AuthSession = await res.json();
+        if (data.access_token && typeof window !== 'undefined') {
+          localStorage.setItem('aral_auth_token', data.access_token);
+          if (data.refresh_token) {
+            localStorage.setItem('aral_refresh_token', data.refresh_token);
+          }
+          return data.access_token;
+        }
+        return null;
+      } catch {
+        return null;
+      } finally {
+        this.refreshPromise = null;
+      }
+    })();
+
+    return this.refreshPromise;
+  }
+
   private getHeaders(contentType: string | null = 'application/json'): HeadersInit {
     const headers: Record<string, string> = {};
     const token = this.getToken();
@@ -70,7 +116,12 @@ class ApiClient {
     }
   }
 
-  private async request<T>(endpoint: string, options: RequestInit = {}, retriesLeft = 1): Promise<T> {
+  private async request<T>(
+    endpoint: string,
+    options: RequestInit = {},
+    retriesLeft = 1,
+    isAuthRetry = false
+  ): Promise<T> {
     const url = `${API_BASE}${endpoint}`;
     const headers = {
       ...this.getHeaders(options.body instanceof FormData ? null : 'application/json'),
@@ -99,7 +150,7 @@ class ApiClient {
       if (isNetworkError && retriesLeft > 0) {
         // Wait 1.8s and retry once to smoothly absorb cold-start sleep or container redeploy
         await new Promise((resolve) => setTimeout(resolve, 1800));
-        return this.request<T>(endpoint, options, retriesLeft - 1);
+        return this.request<T>(endpoint, options, retriesLeft - 1, isAuthRetry);
       }
 
       if (isNetworkError) {
@@ -119,6 +170,25 @@ class ApiClient {
     }
 
     if (!res.ok) {
+      // If 401 Unauthorized occurs due to token expiration, attempt silent refresh & replay
+      if (
+        res.status === 401 &&
+        !isAuthRetry &&
+        !endpoint.includes('/auth/login') &&
+        !endpoint.includes('/auth/signup') &&
+        !endpoint.includes('/auth/refresh')
+      ) {
+        const refreshedToken = await this.refreshAccessToken();
+        if (refreshedToken) {
+          const retryHeaders = {
+            ...this.getHeaders(options.body instanceof FormData ? null : 'application/json'),
+            ...options.headers,
+            Authorization: `Bearer ${refreshedToken}`
+          };
+          return this.request<T>(endpoint, { ...options, headers: retryHeaders }, retriesLeft, true);
+        }
+      }
+
       let errorMessage = `API Error: ${res.status} ${res.statusText}`;
       try {
         const errorData = await res.json();
@@ -264,6 +334,13 @@ class ApiClient {
     return this.request('/auth/exchange-code', {
       method: 'POST',
       body: JSON.stringify({ code })
+    });
+  }
+
+  async refreshSession(refreshToken: string): Promise<AuthSession> {
+    return this.request('/auth/refresh', {
+      method: 'POST',
+      body: JSON.stringify({ refresh_token: refreshToken })
     });
   }
 

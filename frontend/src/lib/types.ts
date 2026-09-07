@@ -12,6 +12,7 @@ export interface User {
 
 export interface AuthSession {
   access_token: string | null;
+  refresh_token?: string | null;
   token_type: string;
   user: User;
   requires_confirmation: boolean;

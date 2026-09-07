@@ -136,6 +136,35 @@ def test_signup_and_login_issues_a_scoped_token():
     assert wrong.status_code == 401
 
 
+def test_token_refresh():
+    email = f"refresh-{os.urandom(4).hex()}@aral.ai"
+    password = "studyhard1"
+
+    created = client.post("/api/auth/signup", json={"email": email, "password": password})
+    assert created.status_code == 200
+    refresh_token = created.json().get("refresh_token")
+    assert refresh_token is not None
+
+    # Call /api/auth/refresh with valid refresh token
+    refreshed = client.post("/api/auth/refresh", json={"refresh_token": refresh_token})
+    assert refreshed.status_code == 200, refreshed.text
+    new_data = refreshed.json()
+    assert new_data["access_token"] is not None
+    assert new_data["refresh_token"] is not None
+    assert new_data["user"]["email"] == email
+
+    # Test using the refreshed access token
+    headers = {"Authorization": f"Bearer {new_data['access_token']}"}
+    me = client.get("/api/auth/me", headers=headers)
+    assert me.status_code == 200
+    assert me.json()["email"] == email
+
+    # Test bad refresh token
+    bad = client.post("/api/auth/refresh", json={"refresh_token": "invalid-token-string"})
+    assert bad.status_code == 401
+
+
+
 def test_cors_preflight_max_age_caching():
     headers = {
         "Origin": "http://localhost:3000",
