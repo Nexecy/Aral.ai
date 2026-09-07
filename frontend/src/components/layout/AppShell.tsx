@@ -114,12 +114,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
+  const isSessionWorkspace = pathname.startsWith('/session/');
+
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col antialiased selection:bg-primary/20">
       <LeftNavbar />
 
       {/* Top Header Bar for Desktop */}
-      <header className="hidden lg:flex fixed top-0 left-[var(--sidebar-width,260px)] right-0 h-20 bg-background/80 backdrop-blur-xl z-40 px-10 items-center justify-between border-b border-border transition-all duration-300">
+      <header className={`hidden lg:flex fixed top-0 left-[var(--sidebar-width,260px)] right-0 bg-background/80 backdrop-blur-xl z-40 items-center justify-between border-b border-border transition-all duration-300 ${
+        isSessionWorkspace ? 'h-14 lg:h-16 px-4 lg:px-6' : 'h-20 px-10'
+      }`}>
         <GlobalKnowledgeSearch ref={searchRef} />
 
         <div className="flex items-center gap-6">
@@ -129,8 +133,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* Main Content Viewport */}
-      <main className="flex-1 lg:pl-[var(--sidebar-width,260px)] pt-14 lg:pt-20 pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-12 transition-all duration-300">
-        <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-10 py-6 lg:py-8">
+      <main className={`flex-1 lg:pl-[var(--sidebar-width,260px)] pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-12 transition-all duration-300 ${
+        isSessionWorkspace ? 'pt-14 lg:pt-16' : 'pt-14 lg:pt-20'
+      }`}>
+        <div className={isSessionWorkspace ? 'max-w-[1920px] mx-auto px-2 sm:px-4 lg:px-6 py-2 sm:py-3 lg:py-4' : 'max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-10 py-6 lg:py-8'}>
           <VerifyEmailBanner />
           {children}
         </div>

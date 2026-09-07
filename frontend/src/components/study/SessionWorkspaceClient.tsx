@@ -95,7 +95,7 @@ const FLOAT_CHAT_SIZE_KEY = 'aral_chat_float_size';
 
 const MIN_DOCKED_CHAT_HEIGHT = 260;
 const MAX_DOCKED_CHAT_HEIGHT = 900;
-const DEFAULT_DOCKED_CHAT_HEIGHT = 400;
+const DEFAULT_DOCKED_CHAT_HEIGHT = 340;
 const DOCKED_CHAT_HEIGHT_KEY = 'aral_chat_docked_height';
 
 interface SessionWorkspaceClientProps {
@@ -174,16 +174,39 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
 
   // ── Horizontal Split Resize ──────────────────────────────────────────────────
-  const [splitRatio, setSplitRatio] = useState<number>(62);
+  // Default to 50% on screens < 1600px (e.g. MacBook Neo, 13" laptops) so the right pane doesn't get squashed.
+  const [splitRatio, setSplitRatio] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('aral_split_ratio');
+      if (saved) {
+        const n = parseFloat(saved);
+        if (!isNaN(n) && n >= 25 && n <= 75) return n;
+      }
+      return window.innerWidth >= 1600 ? 54 : 50;
+    }
+    return 50;
+  });
   const [isHDragging, setIsHDragging] = useState<boolean>(false);
   const splitContainerRef = useRef<HTMLDivElement>(null);
 
   // ── Vertical Viewer Height Resize ────────────────────────────────────────────
-  const [pdfHeight, setPdfHeight] = useState<number>(580);
+  // Adapt height to window viewport so it fits neatly without squashing on smaller screens.
+  const [pdfHeight, setPdfHeight] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('aral_pdf_height');
+      if (saved) {
+        const n = parseInt(saved, 10);
+        if (!isNaN(n) && n >= 360 && n <= 950) return n;
+      }
+      const ideal = Math.round(window.innerHeight - 240);
+      return Math.min(Math.max(ideal, 460), 680);
+    }
+    return 540;
+  });
   const isVDraggingRef = useRef<boolean>(false);
   const [isVDragging, setIsVDragging] = useState<boolean>(false);
   const vDragStartY = useRef<number>(0);
-  const vDragStartH = useRef<number>(580);
+  const vDragStartH = useRef<number>(540);
 
   // ── Exit ─────────────────────────────────────────────────────────────────────
   const [showExitDialog, setShowExitDialog] = useState<boolean>(false);
@@ -978,7 +1001,7 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
       )}
 
       {/* ── HEADER ───────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-surface-container-lowest p-4 sm:p-6 lg:p-7 rounded-2xl border border-outline-variant">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 bg-surface-container-lowest p-3.5 sm:p-4 lg:p-5 rounded-2xl border border-outline-variant">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 text-xs text-on-surface-variant mb-1.5 font-medium">
             <Link href="/" className="hover:text-primary transition-colors shrink-0">Library</Link>
@@ -1165,7 +1188,7 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
 
               <div
                 style={{ flex: `1 1 ${100 - splitRatio}%` }}
-                className={`w-full xl:w-auto flex flex-col gap-6 overflow-y-auto mt-6 xl:mt-0 pr-1 custom-scrollbar ${
+                className={`study-right-pane w-full xl:w-auto flex flex-col gap-4 sm:gap-5 overflow-y-auto mt-4 xl:mt-0 pr-1 custom-scrollbar ${
                   isHDragging ? 'pointer-events-none' : ''
                 }`}
               >
@@ -1175,7 +1198,7 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
                   onOpenFullNotes={() => setViewMode('notes')}
                 />
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div className="study-cards-grid">
                   <CompactFlashcardCard
                     flashcards={flashcards}
                     onOpenDeck={() => setViewMode('flashcards')}
