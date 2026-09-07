@@ -49,11 +49,12 @@ async def upload_document(
     # 1. Extract text and metadata via PyMuPDF
     extracted = pdf_service.extract_text_and_metadata(content_bytes, file.filename)
     
-    # 2. Upload file to Supabase / local storage
+    # 2. Upload file to Supabase / local storage (use sanitized/unrestricted bytes if stripped)
+    bytes_to_store = extracted.get("sanitized_file_bytes") or content_bytes
     storage_path = await storage_service.upload_file(
         user_id=user["id"],
         filename=file.filename,
-        file_bytes=content_bytes,
+        file_bytes=bytes_to_store,
         content_type=file.content_type or "application/pdf"
     )
 

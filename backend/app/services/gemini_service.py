@@ -205,6 +205,51 @@ class GeminiService:
             print(f"[GeminiService] All Gemini models attempted. Last error: {last_error}")
         return None
 
+    def transcribe_page_image_sync(self, image_bytes: bytes, mime_type: str = "image/png") -> Optional[str]:
+        """
+        Synchronously transcribes text from a document page image using Gemini Multimodal Vision.
+        Used as OCR fallback when PDF streams lack /ToUnicode mappings or contain scanned content.
+        """
+        if not self._configured or not HAS_GOOGLE_GENAI:
+            return None
+
+        models = self._get_candidate_models()
+        prompt = (
+            "You are an expert OCR transcription engine. "
+            "Transcribe all readable text from this document page image verbatim and completely. "
+            "Preserve paragraphs, section headings, numbers, legal citations, case captions, and table structures exactly as formatted. "
+            "Do NOT summarize, paraphrase, or add conversational preamble or markdown code fences. "
+            "Output ONLY the transcribed document text."
+        )
+
+        image_part = {
+            "mime_type": mime_type,
+            "data": image_bytes
+        }
+
+        for model_name in models:
+            try:
+                model = genai.GenerativeModel(model_name=model_name)
+                response = model.generate_content(
+                    [prompt, image_part],
+                    request_options={"timeout": 15}
+                )
+                if response and response.text:
+                    cleaned = response.text.strip()
+                    if cleaned:
+                        return cleaned
+            except Exception as e:
+                print(f"[GeminiService] Vision OCR attempt on {model_name} failed: {e}")
+                continue
+
+        return None
+
+    async def transcribe_page_image(self, image_bytes: bytes, mime_type: str = "image/png") -> Optional[str]:
+        """
+        Asynchronously transcribes text from a document page image using Gemini Multimodal Vision.
+        """
+        return await asyncio.to_thread(self.transcribe_page_image_sync, image_bytes, mime_type)
+
     async def generate_notes(self, text: str, document_title: str) -> Dict[str, Any]:
         """
         Generate structured notes (title, summary, sections with headings, subpoints, key terms,
