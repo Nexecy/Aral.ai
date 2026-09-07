@@ -18,11 +18,11 @@ from app.models.schemas import (
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 
-async def _owned_session(session_id: str, user_id: str) -> Dict[str, Any]:
+async def _owned_session(session_id: str, user_id: str, detail: str = "Session not found") -> Dict[str, Any]:
     """Load a session, hiding the existence of other users' records behind a 404."""
     session = await db_service.get_session(session_id)
     if not session or session.get("user_id") != user_id:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail=detail)
     return session
 
 
@@ -126,8 +126,10 @@ async def get_session_snapshot(
     Retrieve full study snapshot: Session, Document text, Reviewed Notes, Flashcards, Quiz Attempts, and Chat.
     Opening the snapshot marks the session as the live active workspace session.
     """
-    await _owned_session(session_id, user["id"])
+    await _owned_session(session_id, user["id"], detail="Session snapshot not found")
     session = await db_service.resume_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session snapshot not found")
 
     document_id = session.get("document_id") if session else None
     document, notes, flashcards, quiz_attempts, chat_history = await asyncio.gather(

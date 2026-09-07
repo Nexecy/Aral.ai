@@ -14,9 +14,22 @@ except ImportError:
     HAS_GOOGLE_GENAI = False
 
 
+try:
+    from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception
+    HAS_TENACITY = True
+except ImportError:
+    HAS_TENACITY = False
+
+
+def _is_transient_rate_limit(e: BaseException) -> bool:
+    msg = str(e).lower()
+    return "429" in msg or "resource_exhausted" in msg or "quota" in msg or "rate limit" in msg or "too many requests" in msg
+
+
 class GeminiService:
     # Priority order of candidate models for fast and resilient generation
     CANDIDATE_MODELS = [
+        "gemini-3.5-flash",
         "gemini-flash-latest",
         "gemini-3.1-flash-lite",
         "gemini-3.7-flash",
@@ -205,10 +218,26 @@ class GeminiService:
             print(f"[GeminiService] All Gemini models attempted. Last error: {last_error}")
         return None
 
-    def transcribe_page_image_sync(self, image_bytes: bytes, mime_type: str = "image/png") -> Optional[str]:
+    @staticmethod
+    def _call_vision_model_with_retry(model: Any, prompt: str, image_part: Dict[str, Any]) -> Any:
+        """Invokes generate_content with tenacity exponential backoff on HTTP 429/ResourceExhausted."""
+        if HAS_TENACITY:
+            @retry(
+                reraise=True,
+                stop=stop_after_attempt(4),
+                wait=wait_exponential(multiplier=1.5, min=2, max=12),
+                retry=retry_if_exception(_is_transient_rate_limit)
+            )
+            def _invoke():
+                return model.generate_content([prompt, image_part], request_options={"timeout": 25})
+            return _invoke()
+        return model.generate_content([prompt, image_part], request_options={"timeout": 25})
+
+    def transcribe_page_image_sync(self, image_bytes: bytes, mime_type: str = "image/jpeg") -> Optional[str]:
         """
         Synchronously transcribes text from a document page image using Gemini Multimodal Vision.
         Used as OCR fallback when PDF streams lack /ToUnicode mappings or contain scanned content.
+        Employs exponential backoff retry on HTTP 429 rate limit errors.
         """
         if not self._configured or not HAS_GOOGLE_GENAI:
             return None
@@ -230,10 +259,7 @@ class GeminiService:
         for model_name in models:
             try:
                 model = genai.GenerativeModel(model_name=model_name)
-                response = model.generate_content(
-                    [prompt, image_part],
-                    request_options={"timeout": 15}
-                )
+                response = self._call_vision_model_with_retry(model, prompt, image_part)
                 if response and response.text:
                     cleaned = response.text.strip()
                     if cleaned:
@@ -244,7 +270,7 @@ class GeminiService:
 
         return None
 
-    async def transcribe_page_image(self, image_bytes: bytes, mime_type: str = "image/png") -> Optional[str]:
+    async def transcribe_page_image(self, image_bytes: bytes, mime_type: str = "image/jpeg") -> Optional[str]:
         """
         Asynchronously transcribes text from a document page image using Gemini Multimodal Vision.
         """

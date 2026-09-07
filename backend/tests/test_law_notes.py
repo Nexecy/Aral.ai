@@ -112,7 +112,7 @@ def test_legal_notes_api_roundtrip():
         files={"file": ("consti_case_digest.txt", io.BytesIO(SAMPLE_LEGAL_CASE_TEXT.encode()), "text/plain")},
         headers=AUTH,
     )
-    assert upload.status_code == 200
+    assert upload.status_code in (200, 202)
     doc_id = upload.json()["id"]
 
     # 2. Create session

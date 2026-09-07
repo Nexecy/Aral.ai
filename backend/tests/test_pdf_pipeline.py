@@ -163,7 +163,252 @@ def test_upload_document_stores_sanitized_bytes():
         files={"file": ("floresca_digest.pdf", restricted_bytes, "application/pdf")},
         headers=AUTH,
     )
-    assert response.status_code == 200
+    assert response.status_code in (200, 202)
     data = response.json()
     assert data["filename"] == "floresca_digest.pdf"
     assert data["page_count"] == 1
+
+
+def create_multi_page_scanned_pdf(num_pages: int = 15) -> bytes:
+    """Creates a multi-page PDF where each page has visual content but no text stream."""
+    doc = fitz.open()
+    for i in range(num_pages):
+        page = doc.new_page()
+        shape = page.new_shape()
+        shape.draw_rect(fitz.Rect(50, 50, 400, 300))
+        shape.finish(fill=(0.9, 0.9, 0.9), color=(0.2, 0.2, 0.2))
+        shape.commit()
+    pdf_bytes = doc.tobytes()
+    doc.close()
+    return pdf_bytes
+
+
+def test_multi_page_pdf_memory_profile():
+    """
+    Simulate processing a 15-page scanned PDF and profile memory to ensure
+    memory remains flat across iterations rather than monotonically increasing.
+    """
+    import tracemalloc
+    import gc
+    from app.core.config import settings
+
+    num_pages = 15
+    pdf_bytes = create_multi_page_scanned_pdf(num_pages=num_pages)
+
+    mock_text = "Page content transcribed via Gemini OCR."
+    memory_snapshots = []
+
+    gc.collect()
+    tracemalloc.start()
+
+    # Track memory before and during extraction by patching _perform_ocr_on_page
+    original_perform_ocr = PDFService._perform_ocr_on_page
+
+    def monitored_perform_ocr(page, page_num, filename, dpi=None, max_dimension=None):
+        result = original_perform_ocr(page, page_num, filename, dpi=dpi, max_dimension=max_dimension)
+        current, peak = tracemalloc.get_traced_memory()
+        memory_snapshots.append((page_num, current))
+        return result
+
+    with patch(
+        "app.services.gemini_service.gemini_service.transcribe_page_image_sync",
+        return_value=mock_text
+    ), patch.object(PDFService, "_perform_ocr_on_page", side_effect=monitored_perform_ocr), \
+       patch.object(settings, "PDF_OCR_MAX_PAGES", 50):
+
+        res = pdf_service.extract_text_and_metadata(pdf_bytes, "multi_page_scanned.pdf")
+
+    current_end, peak_end = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+
+    assert res["page_count"] == num_pages
+    assert res["extraction_summary"]["ocr_pages"] == num_pages
+    assert len(memory_snapshots) == num_pages
+
+    # Check memory stability: memory between page 5 and page 15 should stay flat
+    # (i.e. not growing linearly with each page due to retained buffers)
+    mid_mem = memory_snapshots[4][1]   # Page 5
+    late_mem = memory_snapshots[-1][1]  # Page 15
+
+    # Memory growth should not exceed 5MB between page 5 and page 15
+    # (Without cleanup, 10 rendered uncompressed pages at 150 DPI would hold tens of MBs)
+    mem_diff_mb = abs(late_mem - mid_mem) / (1024 * 1024)
+    assert mem_diff_mb < 5.0, f"Memory grew by {mem_diff_mb:.2f} MB across iterations (expected flat RSS)"
+
+
+def test_ocr_page_limit_cap():
+    """
+    Verify that when a PDF has more scanned pages than PDF_OCR_MAX_PAGES,
+    synchronous OCR rendering is capped, subsequent pages are flagged as
+    'ocr_limit_reached', and processing finishes without crashing.
+    """
+    from app.core.config import settings
+
+    cap = 3
+    total_pages = 8
+    pdf_bytes = create_multi_page_scanned_pdf(num_pages=total_pages)
+
+    mock_text = "Standard transcribed legal text."
+
+    with patch(
+        "app.services.gemini_service.gemini_service.transcribe_page_image_sync",
+        return_value=mock_text
+    ), patch.object(settings, "PDF_OCR_MAX_PAGES", cap):
+
+        res = pdf_service.extract_text_and_metadata(pdf_bytes, "large_scanned_book.pdf")
+
+        assert res["page_count"] == total_pages
+        # Only the capped number of pages should be processed via OCR
+        assert res["extraction_summary"]["ocr_pages"] == cap
+
+        # Verify page provenance correctly reflects the cap
+        for p in res["page_provenance"][:cap]:
+            assert p["source"] == "ocr_fallback (gemini_vision)"
+
+        for p in res["page_provenance"][cap:]:
+            assert p["source"] == "ocr_limit_reached"
+
+        # Verify the warning message appears in extracted text for capped pages
+        assert f"OCR limit of {cap} pages reached" in res["extracted_text"]
+
+
+def test_dpi_and_dynamic_downscaling():
+    """
+    Verify that 150 DPI is used by default and dynamic downscaling bounds
+    unusually large pages to max_dimension (e.g. 2000px).
+    """
+    # Create an unusually large page (e.g. 3000 x 3000 points)
+    doc = fitz.open()
+    page = doc.new_page(width=3000, height=3000)
+    shape = page.new_shape()
+    shape.draw_rect(fitz.Rect(100, 100, 2800, 2800))
+    shape.finish(fill=(0.8, 0.8, 0.8))
+    shape.commit()
+
+    with patch(
+        "app.services.gemini_service.gemini_service.transcribe_page_image_sync",
+        return_value="Transcribed huge page."
+    ) as mock_gemini:
+        text, method = PDFService._perform_ocr_on_page(page, 0, "huge_poster.pdf", dpi=150, max_dimension=2000)
+
+        assert text == "Transcribed huge page."
+        assert method == "ocr_fallback (gemini_vision)"
+        assert mock_gemini.called
+
+        # Verify image bytes passed to Gemini are reasonably sized (< 2MB)
+        passed_bytes = mock_gemini.call_args[0][0]
+        assert len(passed_bytes) < 2 * 1024 * 1024
+
+    doc.close()
+
+
+@pytest.mark.asyncio
+async def test_async_pdf_pipeline_bounded_concurrency():
+    """
+    Verify that extract_text_and_metadata_async processes multiple scanned pages
+    concurrently up to the bounded concurrency semaphore (default 5),
+    streams compressed JPEGs, and triggers progressive callbacks.
+    """
+    import asyncio
+    from app.services.gemini_service import gemini_service
+
+    num_pages = 8
+    concurrency_limit = 5
+    pdf_bytes = create_multi_page_scanned_pdf(num_pages=num_pages)
+
+    active_concurrent_calls = 0
+    max_observed_concurrency = 0
+    concurrency_lock = asyncio.Lock()
+    progressive_updates = []
+
+    async def mock_transcribe(img_bytes: bytes, mime_type: str = "image/jpeg"):
+        nonlocal active_concurrent_calls, max_observed_concurrency
+        # Verify JPEG compression
+        assert mime_type == "image/jpeg"
+        assert img_bytes[:2] == b'\xff\xd8'  # Standard JPEG magic bytes
+
+        async with concurrency_lock:
+            active_concurrent_calls += 1
+            if active_concurrent_calls > max_observed_concurrency:
+                max_observed_concurrency = active_concurrent_calls
+
+        # Simulate network latency
+        await asyncio.sleep(0.02)
+
+        async with concurrency_lock:
+            active_concurrent_calls -= 1
+
+        return "Verbatim legal page content from Gemini."
+
+    async def mock_on_page(page_num: int, current_text: str, current_page_count: int):
+        progressive_updates.append((page_num, len(current_text), current_page_count))
+
+    with patch.object(gemini_service, "transcribe_page_image", side_effect=mock_transcribe):
+        res = await PDFService.extract_text_and_metadata_async(
+            file_bytes=pdf_bytes,
+            filename="concurrent_statcon.pdf",
+            concurrency=concurrency_limit,
+            on_page_callback=mock_on_page
+        )
+
+    assert res["page_count"] == num_pages
+    assert res["extraction_summary"]["ocr_pages"] == num_pages
+    assert len(progressive_updates) == num_pages
+
+    # Verify concurrency was bounded: should reach up to concurrency_limit, but never exceed it
+    assert max_observed_concurrency <= concurrency_limit
+    assert max_observed_concurrency > 1, f"Expected concurrent execution, but max concurrency was {max_observed_concurrency}"
+
+
+def test_upload_endpoint_returns_202_accepted():
+    """
+    Verify that POST /api/documents/upload returns HTTP 202 Accepted immediately
+    with status 'processing' without blocking the caller.
+    """
+    pdf_bytes = create_standard_pdf("Quick test document.")
+    response = client.post(
+        "/api/documents/upload",
+        files={"file": ("quick_upload.pdf", pdf_bytes, "application/pdf")},
+        headers=AUTH,
+    )
+    assert response.status_code == 202
+    data = response.json()
+    assert data["status"] in ("processing", "ready")
+    assert "id" in data
+    assert data["filename"] == "quick_upload.pdf"
+
+
+def test_gemini_vision_tenacity_retry_on_429():
+    """
+    Verify that when Gemini Vision raises a 429 ResourceExhausted / Rate Limit error,
+    the tenacity retry decorator retries with exponential backoff and succeeds.
+    """
+    from unittest.mock import MagicMock
+    from app.services.gemini_service import gemini_service
+
+    attempts = 0
+    mock_model = MagicMock()
+
+    class RateLimit429(Exception):
+        pass
+
+    def mock_generate(*args, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts < 3:
+            raise RateLimit429("429 ResourceExhausted: Quota exceeded. Please slow down.")
+        mock_response = MagicMock()
+        mock_response.text = "Success after 429 retry."
+        return mock_response
+
+    mock_model.generate_content.side_effect = mock_generate
+
+    result = gemini_service._call_vision_model_with_retry(
+        mock_model,
+        "Test prompt",
+        {"mime_type": "image/jpeg", "data": b"123"}
+    )
+    assert result.text == "Success after 429 retry."
+    assert attempts == 3
+
+

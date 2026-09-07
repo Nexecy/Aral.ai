@@ -31,13 +31,69 @@ def _media_type_for(filename: str) -> str:
     ext = os.path.splitext(filename or "")[1].lower()
     return MEDIA_TYPES.get(ext, "application/pdf")
 
-@router.post("/upload", response_model=DocumentResponse)
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status, BackgroundTasks
+import logging
+import gc
+
+logger = logging.getLogger("documents_router")
+
+
+async def _process_document_background(
+    doc_id: str,
+    content_bytes: bytes,
+    filename: str,
+    user_id: str
+):
+    try:
+        async def on_page_resolved(page_num: int, current_text: str, current_page_count: int):
+            await db_service.update_document(doc_id, {
+                "extracted_text": current_text,
+                "page_count": current_page_count,
+                "status": "processing"
+            })
+
+        extracted = await pdf_service.extract_text_and_metadata_async(
+            file_bytes=content_bytes,
+            filename=filename,
+            on_page_callback=on_page_resolved
+        )
+
+        # If sanitized/unrestricted bytes were produced (e.g. stripped permissions), re-upload clean file
+        if extracted.get("sanitized_file_bytes") and extracted.get("was_permission_restricted"):
+            try:
+                await storage_service.upload_file(
+                    user_id=user_id,
+                    filename=filename,
+                    file_bytes=extracted["sanitized_file_bytes"],
+                    content_type="application/pdf"
+                )
+            except Exception as store_err:
+                logger.debug(f"[DocumentProcessing] Notice re-saving sanitized file: {store_err}")
+
+        # Mark ready with complete extracted text and final page count
+        await db_service.update_document(doc_id, {
+            "extracted_text": extracted.get("extracted_text", ""),
+            "page_count": extracted.get("page_count", 1),
+            "status": "ready"
+        })
+        logger.info(f"[DocumentProcessing] Completed background parsing for '{filename}' ({doc_id})")
+    except Exception as e:
+        logger.error(f"[DocumentProcessing] Error in background parsing for '{filename}' ({doc_id}): {e}")
+        await db_service.update_document(doc_id, {"status": "error"})
+    finally:
+        del content_bytes
+        gc.collect()
+
+
+@router.post("/upload", response_model=DocumentResponse, status_code=status.HTTP_202_ACCEPTED)
 async def upload_document(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
-    Upload reference study PDF/document, extract text via PyMuPDF, store in Supabase Storage, and save database metadata.
+    Upload reference study PDF/document non-blocking: stores raw file in storage, creates record with status 'processing',
+    returns HTTP 202 Accepted immediately, and parses document text via high-throughput bounded async pipeline in background.
     """
     if not file.filename:
         raise HTTPException(status_code=400, detail="Missing filename")
@@ -46,30 +102,45 @@ async def upload_document(
     if len(content_bytes) == 0:
         raise HTTPException(status_code=400, detail="Uploaded file is empty")
 
-    # 1. Extract text and metadata via PyMuPDF
-    extracted = pdf_service.extract_text_and_metadata(content_bytes, file.filename)
-    
-    # 2. Upload file to Supabase / local storage (use sanitized/unrestricted bytes if stripped)
-    bytes_to_store = extracted.get("sanitized_file_bytes") or content_bytes
+    # 1. Upload raw file to Supabase / local storage immediately
     storage_path = await storage_service.upload_file(
         user_id=user["id"],
         filename=file.filename,
-        file_bytes=bytes_to_store,
-        content_type=file.content_type or "application/pdf"
+        file_bytes=content_bytes,
+        content_type=file.content_type or _media_type_for(file.filename)
     )
 
-    # 3. Store in DB
+    # Fast initial page count detection
+    initial_page_count = 1
+    if file.filename.lower().endswith(".pdf"):
+        try:
+            import pymupdf as fitz
+            with fitz.open(stream=content_bytes, filetype="pdf") as quick_doc:
+                initial_page_count = max(len(quick_doc), 1)
+        except Exception:
+            initial_page_count = 1
+
+    # 2. Create document record with status 'processing'
     doc_record = await db_service.create_document(
         user_id=user["id"],
         filename=file.filename,
         storage_path=storage_path,
-        page_count=extracted["page_count"],
-        extracted_text=extracted["extracted_text"],
-        file_size_bytes=extracted["file_size_bytes"]
+        page_count=initial_page_count,
+        extracted_text="",
+        file_size_bytes=len(content_bytes),
+        status="processing"
     )
 
-    # The client only needs the id to create a session. Keep the extract in the
-    # database; don't ship tens of KB back on the upload response.
+    # 3. Schedule async background worker for text extraction & progressive persistence
+    background_tasks.add_task(
+        _process_document_background,
+        doc_id=doc_record["id"],
+        content_bytes=content_bytes,
+        filename=file.filename,
+        user_id=user["id"]
+    )
+
+    # Return HTTP 202 immediately
     return {**doc_record, "extracted_text": ""}
 
 @router.get("", response_model=List[DocumentResponse])

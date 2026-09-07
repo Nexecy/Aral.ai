@@ -34,6 +34,12 @@ class Settings(BaseSettings):
         default="http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001,tauri://localhost,capacitor://localhost"
     )
 
+    # PDF Processing & OCR Optimization
+    PDF_OCR_MAX_PAGES: int = Field(default=50, description="Max pages to perform OCR on synchronously in one request")
+    PDF_OCR_DPI: int = Field(default=150, description="DPI for OCR page rendering (150 DPI saves ~44% RAM vs 200 DPI)")
+    PDF_OCR_MAX_DIMENSION: int = Field(default=2000, description="Max pixel width/height for rendered OCR pages")
+    PDF_OCR_CONCURRENCY: int = Field(default=5, description="Max concurrent OCR requests via asyncio.Semaphore")
+
     @property
     def frontend_origin(self) -> str:
         url = (self.FRONTEND_URL or "").strip().rstrip("/")

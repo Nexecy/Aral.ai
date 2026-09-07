@@ -25,7 +25,7 @@ def session_id():
         files={"file": ("memory_systems.txt", io.BytesIO(SAMPLE_TEXT.encode()), "text/plain")},
         headers=AUTH,
     )
-    assert upload.status_code == 200, upload.text
+    assert upload.status_code in (200, 202), upload.text
     document_id = upload.json()["id"]
 
     created = client.post(
@@ -423,3 +423,47 @@ def _foreign_token() -> str:
         secret,
         algorithm="HS256",
     )
+
+
+def test_get_session_snapshot_not_found(capsys):
+    """
+    Verify that requesting a non-existent session ID returns a clean 404 response
+    with {"detail": "Session snapshot not found"} without noisy backend error logs.
+    """
+    response = client.get("/api/sessions/00000000-0000-0000-0000-000000000000/snapshot", headers=AUTH)
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Session snapshot not found"
+
+    # Confirm no noisy error stack trace was logged to stdout/stderr
+    captured = capsys.readouterr()
+    assert "[DBService] Supabase get session error" not in captured.out
+    assert "[DBService] Supabase get session error" not in captured.err
+
+
+@pytest.mark.asyncio
+async def test_supabase_pgrst116_handled_cleanly(capsys):
+    """
+    Verify that when Supabase/PostgREST throws PGRST116 ('The result contains 0 rows'),
+    DBService handles it silently without printing unhandled database exception stack traces.
+    """
+    from unittest.mock import MagicMock
+    from app.services.db_service import db_service
+
+    # Create mock that raises PGRST116 exception
+    mock_supabase = MagicMock()
+    pgrst_error = Exception({'message': 'Cannot coerce the result to a single JSON object', 'code': 'PGRST116', 'hint': None, 'details': 'The result contains 0 rows'})
+    mock_supabase.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.side_effect = pgrst_error
+
+    orig_supabase = db_service.supabase
+    try:
+        db_service.supabase = mock_supabase
+        res = await db_service.get_session("non-existent-uuid")
+        assert res is None
+
+        # Verify no noisy error was printed
+        captured = capsys.readouterr()
+        assert "[DBService] Supabase get session error" not in captured.out
+        assert "[DBService] Supabase get session error" not in captured.err
+    finally:
+        db_service.supabase = orig_supabase
+

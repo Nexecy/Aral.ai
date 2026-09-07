@@ -64,6 +64,19 @@ class DBService:
             return None
         return {k: v for k, v in doc.items() if k != "extracted_text"}
 
+    @staticmethod
+    def _is_pgrst116_not_found(e: Exception) -> bool:
+        """Check if an exception is PostgREST PGRST116 (0 rows returned for single object query)."""
+        if hasattr(e, "code") and getattr(e, "code") == "PGRST116":
+            return True
+        if hasattr(e, "args") and e.args:
+            first_arg = e.args[0]
+            if isinstance(first_arg, dict) and first_arg.get("code") == "PGRST116":
+                return True
+            if "PGRST116" in str(first_arg):
+                return True
+        return "PGRST116" in str(e)
+
     def _init_supabase(self):
         if HAS_SUPABASE and settings.has_supabase_credentials:
             try:
@@ -75,7 +88,16 @@ class DBService:
     # --------------------------------------------------------------------------
     # Document Operations
     # --------------------------------------------------------------------------
-    async def create_document(self, user_id: str, filename: str, storage_path: str, page_count: int, extracted_text: str, file_size_bytes: int) -> Dict[str, Any]:
+    async def create_document(
+        self,
+        user_id: str,
+        filename: str,
+        storage_path: str,
+        page_count: int,
+        extracted_text: str,
+        file_size_bytes: int,
+        status: str = "ready"
+    ) -> Dict[str, Any]:
         doc_id = str(uuid.uuid4())
         now = datetime.utcnow().isoformat()
         doc = {
@@ -86,7 +108,8 @@ class DBService:
             "page_count": page_count,
             "extracted_text": extracted_text,
             "file_size_bytes": file_size_bytes,
-            "uploaded_at": now
+            "uploaded_at": now,
+            "status": status
         }
         if self.supabase:
             try:
@@ -94,7 +117,20 @@ class DBService:
                 if res.data:
                     return res.data[0]
             except Exception as e:
-                print(f"[DBService] Supabase insert document error: {e}")
+                # If Supabase table schema lacks 'status' column, fallback without 'status'
+                if "status" in str(e).lower():
+                    try:
+                        doc_no_status = {k: v for k, v in doc.items() if k != "status"}
+                        res = self.supabase.table("documents").insert(doc_no_status).execute()
+                        if res.data:
+                            row = res.data[0]
+                            row["status"] = doc.get("status", status)
+                            self.documents[doc_id] = row
+                            return row
+                    except Exception as e2:
+                        print(f"[DBService] Supabase insert document error: {e2}")
+                else:
+                    print(f"[DBService] Supabase insert document error: {e}")
         
         self.documents[doc_id] = doc
         return doc
@@ -118,11 +154,12 @@ class DBService:
     async def get_document(self, doc_id: str) -> Optional[Dict[str, Any]]:
         if self.supabase:
             try:
-                res = self.supabase.table("documents").select("*").eq("id", doc_id).single().execute()
-                if res.data:
+                res = self.supabase.table("documents").select("*").eq("id", doc_id).maybe_single().execute()
+                if res and res.data:
                     return res.data
             except Exception as e:
-                print(f"[DBService] Supabase get document error: {e}")
+                if not self._is_pgrst116_not_found(e):
+                    print(f"[DBService] Supabase get document error: {e}")
 
         return self.documents.get(doc_id)
 
@@ -140,7 +177,16 @@ class DBService:
                         self.documents[doc_id].update(doc)
                     return doc
             except Exception as e:
-                print(f"[DBService] Supabase update document error: {e}")
+                # If Supabase lacks 'status' column, retry update without it
+                if "status" in clean_updates and "status" in str(e).lower():
+                    try:
+                        updates_no_status = {k: v for k, v in clean_updates.items() if k != "status"}
+                        if updates_no_status:
+                            self.supabase.table("documents").update(updates_no_status).eq("id", doc_id).execute()
+                    except Exception:
+                        pass
+                else:
+                    print(f"[DBService] Supabase update document error: {e}")
 
         if doc_id in self.documents:
             self.documents[doc_id].update(clean_updates)
@@ -292,11 +338,12 @@ class DBService:
     async def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
         if self.supabase:
             try:
-                res = self.supabase.table("sessions").select(SESSION_LIST_SELECT).eq("id", session_id).single().execute()
-                if res.data:
+                res = self.supabase.table("sessions").select(SESSION_LIST_SELECT).eq("id", session_id).maybe_single().execute()
+                if res and res.data:
                     return res.data
             except Exception as e:
-                print(f"[DBService] Supabase get session error: {e}")
+                if not self._is_pgrst116_not_found(e):
+                    print(f"[DBService] Supabase get session error: {e}")
 
         session = self.sessions.get(session_id)
         if session:
@@ -631,8 +678,8 @@ class DBService:
         }
         if self.supabase:
             try:
-                res = self.supabase.table("pomodoro_settings").select("*").eq("user_id", user_id).single().execute()
-                if res.data:
+                res = self.supabase.table("pomodoro_settings").select("*").eq("user_id", user_id).maybe_single().execute()
+                if res and res.data:
                     return res.data
             except Exception:
                 pass
@@ -838,11 +885,12 @@ class DBService:
     async def get_exam(self, exam_id: str) -> Optional[Dict[str, Any]]:
         if self.supabase:
             try:
-                res = self.supabase.table("exams").select("*").eq("id", exam_id).single().execute()
-                if res.data:
+                res = self.supabase.table("exams").select("*").eq("id", exam_id).maybe_single().execute()
+                if res and res.data:
                     return self._decorate_exam(res.data)
             except Exception as e:
-                print(f"[DBService] Supabase get exam error: {e}")
+                if not self._is_pgrst116_not_found(e):
+                    print(f"[DBService] Supabase get exam error: {e}")
 
         exam = self.exams.get(exam_id)
         return self._decorate_exam(exam) if exam else None

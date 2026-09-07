@@ -1,8 +1,11 @@
 import pymupdf as fitz
 import io
 import re
+import gc
+import asyncio
 import logging
 from typing import Dict, Any, List, Optional, Tuple
+from app.core.config import settings
 
 logger = logging.getLogger("pdf_service")
 if not logger.handlers:
@@ -66,43 +69,268 @@ class PDFService:
         return False, "Valid native text stream"
 
     @staticmethod
-    def _perform_ocr_on_page(page: fitz.Page, page_num: int, filename: str) -> Tuple[Optional[str], str]:
+    def _run_pytesseract_ocr(img_bytes: bytes) -> Optional[str]:
+        bio = None
+        img = None
+        try:
+            import pytesseract
+            from PIL import Image
+            bio = io.BytesIO(img_bytes)
+            img = Image.open(bio)
+            tess_text = pytesseract.image_to_string(img).strip()
+            if tess_text and len(tess_text) > 10:
+                return tess_text
+        except Exception:
+            pass
+        finally:
+            if img is not None:
+                try:
+                    img.close()
+                except Exception:
+                    pass
+                del img
+            if bio is not None:
+                try:
+                    bio.close()
+                except Exception:
+                    pass
+                del bio
+        return None
+
+    @staticmethod
+    def _perform_ocr_on_page(
+        page: fitz.Page,
+        page_num: int,
+        filename: str,
+        dpi: Optional[int] = None,
+        max_dimension: Optional[int] = None
+    ) -> Tuple[Optional[str], str]:
         """
-        Renders the page at 200 DPI and invokes OCR fallback.
+        Renders the page at ~130-150 DPI directly to a compressed JPEG byte buffer
+        and invokes OCR fallback with immediate pixmap memory release.
         Priority:
         1. Gemini Multimodal Vision API (high-accuracy layout & text transcription).
         2. Local pytesseract (if installed and working).
         """
+        pix = None
+        img_bytes = None
         try:
-            # Minimum 150-200 DPI required for accurate text and small print recognition
-            pix = page.get_pixmap(dpi=200)
-            img_bytes = pix.tobytes("png")
+            # Render page directly to compressed JPEG buffer (~130-150 DPI via Matrix(1.5, 1.5))
+            pix = page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5), alpha=False)
+            img_bytes = pix.tobytes("jpeg")
         except Exception as e:
             logger.warning(f"[PDFService] Failed to render page {page_num + 1} of '{filename}' to image: {e}")
             return None, "render_failed"
+        finally:
+            # Immediately release C pixmap memory
+            if pix is not None:
+                del pix
+
+        ocr_result_text = None
+        ocr_source_method = "ocr_unavailable"
 
         # 1. Gemini Multimodal Vision OCR
         try:
             from app.services.gemini_service import gemini_service
             if hasattr(gemini_service, "transcribe_page_image_sync"):
-                ocr_result = gemini_service.transcribe_page_image_sync(img_bytes, mime_type="image/png")
+                ocr_result = gemini_service.transcribe_page_image_sync(img_bytes, mime_type="image/jpeg")
                 if ocr_result and len(ocr_result.strip()) > 10:
-                    return ocr_result.strip(), "ocr_fallback (gemini_vision)"
+                    ocr_result_text = ocr_result.strip()
+                    ocr_source_method = "ocr_fallback (gemini_vision)"
         except Exception as e:
             logger.debug(f"[PDFService] Gemini Vision OCR attempt for page {page_num + 1} skipped/failed: {e}")
 
         # 2. Local pytesseract fallback
-        try:
-            import pytesseract
-            from PIL import Image
-            img = Image.open(io.BytesIO(img_bytes))
-            tess_text = pytesseract.image_to_string(img).strip()
-            if tess_text and len(tess_text) > 10:
-                return tess_text, "ocr_fallback (pytesseract)"
-        except Exception:
-            pass
+        if not ocr_result_text:
+            tess = PDFService._run_pytesseract_ocr(img_bytes)
+            if tess:
+                ocr_result_text = tess
+                ocr_source_method = "ocr_fallback (pytesseract)"
 
-        return None, "ocr_unavailable"
+        # Explicitly release image byte buffer and trigger collection
+        del img_bytes
+        gc.collect()
+
+        return ocr_result_text, ocr_source_method
+
+    @staticmethod
+    async def extract_text_and_metadata_async(
+        file_bytes: bytes,
+        filename: str,
+        concurrency: Optional[int] = None,
+        on_page_callback: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """
+        Asynchronously parses and transcribes documents using bounded concurrency (asyncio.Semaphore),
+        in-memory JPEG streaming, immediate pixmap drops, progressive database persistence, and GC.
+        """
+        name_lower = filename.lower()
+        if not name_lower.endswith(".pdf"):
+            return await asyncio.to_thread(PDFService.extract_text_and_metadata, file_bytes, filename)
+
+        try:
+            doc = fitz.open(stream=file_bytes, filetype="pdf")
+
+            # 1. Permission Stripping / Decryption
+            is_encrypted_doc = bool(doc.is_encrypted or doc.needs_pass or doc.metadata.get("encryption"))
+            is_copy_prohibited = not bool(doc.permissions & fitz.PDF_PERM_COPY)
+            was_encrypted = is_encrypted_doc or is_copy_prohibited
+            unlocked_with_empty_pass = False
+            sanitized_bytes = None
+
+            if is_encrypted_doc or doc.needs_pass:
+                auth_status = doc.authenticate("")
+                if auth_status > 0:
+                    unlocked_with_empty_pass = True
+                    logger.info(f"[PDFService] '{filename}' unlocked with empty password.")
+                else:
+                    logger.warning(f"[PDFService] '{filename}' could not be unlocked with empty string.")
+
+            if was_encrypted or is_copy_prohibited:
+                try:
+                    clean_stream = doc.tobytes(encryption=fitz.PDF_ENCRYPT_NONE, garbage=3, deflate=True)
+                    if clean_stream and len(clean_stream) > 100:
+                        sanitized_bytes = clean_stream
+                        doc.close()
+                        doc = fitz.open(stream=sanitized_bytes, filetype="pdf")
+                        logger.info(f"[PDFService] '{filename}' permission flags stripped. Unrestricted streams loaded.")
+                except Exception as e:
+                    logger.debug(f"[PDFService] Permission stripping notice for '{filename}': {e}")
+
+            page_count = len(doc)
+            max_concurrency = concurrency or getattr(settings, "PDF_OCR_CONCURRENCY", 5)
+            semaphore = asyncio.Semaphore(max_concurrency)
+            render_lock = asyncio.Lock()
+
+            page_results: Dict[int, Dict[str, Any]] = {}
+
+            async def _process_page_async(page_num: int):
+                async with semaphore:
+                    img_bytes = None
+                    cleaned_text = ""
+                    needs_ocr = False
+                    reason = ""
+
+                    # Synchronize PyMuPDF page loading and JPEG rendering under lock
+                    async with render_lock:
+                        page = doc.load_page(page_num)
+                        try:
+                            raw_text = page.get_text("text")
+                            cleaned_text = re.sub(r"\n{3,}", "\n\n", raw_text).strip()
+                            needs_ocr, reason = PDFService._is_poor_or_unmapped_text(cleaned_text, page)
+
+                            if needs_ocr:
+                                # Render page at ~130-150 DPI directly to compressed JPEG byte buffer
+                                pix = page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5), alpha=False)
+                                img_bytes = pix.tobytes("jpeg")
+                                del pix  # Drop raw uncompressed pixmap immediately!
+                        finally:
+                            del page
+
+                    if not needs_ocr:
+                        page_text = cleaned_text
+                        source_type = "decrypted_stream" if (was_encrypted or unlocked_with_empty_pass) else "native_stream"
+                    else:
+                        page_text = cleaned_text
+                        source_type = "ocr_unavailable"
+                        if img_bytes:
+                            try:
+                                from app.services.gemini_service import gemini_service
+                                ocr_result = await gemini_service.transcribe_page_image(img_bytes, mime_type="image/jpeg")
+                                if ocr_result and len(ocr_result.strip()) > 10:
+                                    page_text = ocr_result.strip()
+                                    source_type = "ocr_fallback (gemini_vision)"
+                                else:
+                                    tess = await asyncio.to_thread(PDFService._run_pytesseract_ocr, img_bytes)
+                                    if tess and len(tess.strip()) > 10:
+                                        page_text = tess.strip()
+                                        source_type = "ocr_fallback (pytesseract)"
+                            except Exception as e:
+                                logger.debug(f"[PDFService] OCR error on page {page_num + 1}: {e}")
+                            finally:
+                                del img_bytes
+                                gc.collect()
+
+                    page_results[page_num] = {
+                        "page_number": page_num + 1,
+                        "text": page_text,
+                        "source": source_type,
+                        "character_count": len(page_text)
+                    }
+
+                    # Persist extracted text progressively to Supabase as each page resolves
+                    if on_page_callback:
+                        try:
+                            current_texts = [
+                                f"--- [Page {idx + 1}] ---\n{page_results[idx]['text']}"
+                                for idx in sorted(page_results.keys())
+                                if page_results[idx]["text"].strip()
+                            ]
+                            await on_page_callback(
+                                page_num=page_num + 1,
+                                current_text="\n\n".join(current_texts),
+                                current_page_count=page_count
+                            )
+                        except Exception as cb_err:
+                            logger.debug(f"[PDFService] Progressive update callback notice: {cb_err}")
+
+                    gc.collect()
+
+            # Process all pages concurrently (bounded by semaphore to max 5 concurrent)
+            await asyncio.gather(*(_process_page_async(i) for i in range(page_count)))
+
+            full_text_pages = []
+            page_provenance = []
+            native_count = 0
+            decrypted_count = 0
+            ocr_count = 0
+
+            for i in range(page_count):
+                info = page_results.get(i, {"page_number": i + 1, "text": "", "source": "unmapped_fallback", "character_count": 0})
+                page_provenance.append({
+                    "page_number": info["page_number"],
+                    "source": info["source"],
+                    "character_count": info["character_count"]
+                })
+                if "gemini_vision" in info["source"] or "ocr" in info["source"]:
+                    ocr_count += 1
+                elif "decrypted" in info["source"]:
+                    decrypted_count += 1
+                else:
+                    native_count += 1
+
+                if info["text"].strip():
+                    full_text_pages.append(f"--- [Page {i + 1}] ---\n{info['text']}")
+
+            combined_text = "\n\n".join(full_text_pages)
+            doc.close()
+            del doc
+            gc.collect()
+
+            if not combined_text.strip():
+                combined_text = f"Document: {filename}\n[Scanned / Image-heavy PDF detected. Extracting available structural headers.]"
+
+            logger.info(
+                f"[PDFService] Async extraction completed for '{filename}': {native_count} native, "
+                f"{decrypted_count} decrypted, {ocr_count} OCR fallback across {page_count} pages."
+            )
+
+            return {
+                "page_count": max(page_count, 1),
+                "extracted_text": combined_text,
+                "file_size_bytes": len(file_bytes),
+                "sanitized_file_bytes": sanitized_bytes or file_bytes,
+                "was_permission_restricted": was_encrypted,
+                "page_provenance": page_provenance,
+                "extraction_summary": {
+                    "native_pages": native_count,
+                    "decrypted_pages": decrypted_count,
+                    "ocr_pages": ocr_count
+                }
+            }
+        except Exception as e:
+            logger.error(f"[PDFService] Error during async PDF extraction for '{filename}': {e}")
+            return PDFService.extract_text_and_metadata(file_bytes, filename)
 
     @staticmethod
     def extract_text_and_metadata(file_bytes: bytes, filename: str) -> Dict[str, Any]:
@@ -216,10 +444,13 @@ class PDFService:
             except Exception as e:
                 logger.debug(f"[PDFService] Vision OCR attempt on raw image failed: {e}")
 
+            bio = None
+            img = None
             try:
                 import pytesseract
                 from PIL import Image
-                img = Image.open(io.BytesIO(file_bytes))
+                bio = io.BytesIO(file_bytes)
+                img = Image.open(bio)
                 extracted = pytesseract.image_to_string(img).strip()
                 combined_text = extracted or f"Image: {filename}\n[No readable text detected via OCR. The image may contain diagrams or non-text content.]"
                 return {
@@ -245,6 +476,20 @@ class PDFService:
                     "sanitized_file_bytes": file_bytes,
                     "extraction_summary": {"native_pages": 0, "decrypted_pages": 0, "ocr_pages": 0},
                 }
+            finally:
+                if img is not None:
+                    try:
+                        img.close()
+                    except Exception:
+                        pass
+                    del img
+                if bio is not None:
+                    try:
+                        bio.close()
+                    except Exception:
+                        pass
+                    del bio
+                gc.collect()
 
         # ── PDF (default) ──────────────────────────────────────────────────────
         try:
@@ -291,50 +536,75 @@ class PDFService:
             native_count = 0
             decrypted_count = 0
             ocr_count = 0
+            ocr_pages_rendered = 0
+
+            max_ocr_pages = getattr(settings, "PDF_OCR_MAX_PAGES", 50)
+            ocr_dpi = getattr(settings, "PDF_OCR_DPI", 150)
+            max_dimension = getattr(settings, "PDF_OCR_MAX_DIMENSION", 2000)
 
             for page_num in range(page_count):
                 page = doc.load_page(page_num)
-                raw_text = page.get_text("text")
-                cleaned_text = re.sub(r"\n{3,}", "\n\n", raw_text).strip()
+                try:
+                    raw_text = page.get_text("text")
+                    cleaned_text = re.sub(r"\n{3,}", "\n\n", raw_text).strip()
 
-                needs_ocr, reason = PDFService._is_poor_or_unmapped_text(cleaned_text, page)
+                    needs_ocr, reason = PDFService._is_poor_or_unmapped_text(cleaned_text, page)
 
-                if needs_ocr:
-                    logger.info(
-                        f"[PDFService] Page {page_num + 1}/{page_count} in '{filename}': {reason}. "
-                        f"Rendering at 200 DPI for OCR fallback..."
-                    )
-                    ocr_text, ocr_method = PDFService._perform_ocr_on_page(page, page_num, filename)
-                    if ocr_text:
-                        page_text = ocr_text
-                        source_type = ocr_method
-                        ocr_count += 1
+                    if needs_ocr:
+                        if ocr_pages_rendered >= max_ocr_pages:
+                            logger.warning(
+                                f"[PDFService] Page {page_num + 1}/{page_count} in '{filename}': OCR safety cap "
+                                f"reached ({max_ocr_pages} pages). Skipping image rendering to prevent OOM."
+                            )
+                            page_text = cleaned_text or f"[Page {page_num + 1}: OCR limit of {max_ocr_pages} pages reached for this request. Scanned text extraction capped.]"
+                            source_type = "ocr_limit_reached"
+                        else:
+                            logger.info(
+                                f"[PDFService] Page {page_num + 1}/{page_count} in '{filename}': {reason}. "
+                                f"Rendering at {ocr_dpi} DPI for OCR fallback..."
+                            )
+                            ocr_text, ocr_method = PDFService._perform_ocr_on_page(
+                                page, page_num, filename, dpi=ocr_dpi, max_dimension=max_dimension
+                            )
+                            ocr_pages_rendered += 1
+                            gc.collect()
+
+                            if ocr_text:
+                                page_text = ocr_text
+                                source_type = ocr_method
+                                ocr_count += 1
+                                logger.info(f"[PDFService] Page {page_num + 1}/{page_count}: processed via {source_type} ({len(page_text)} chars)")
+                            else:
+                                page_text = cleaned_text or f"[Page {page_num + 1}: Scanned or non-Unicode content detected. Text stream unavailable.]"
+                                source_type = "unmapped_fallback"
+                                logger.warning(f"[PDFService] Page {page_num + 1}/{page_count}: OCR fallback unavailable.")
+                    else:
+                        page_text = cleaned_text
+                        if was_encrypted or unlocked_with_empty_pass:
+                            source_type = "decrypted_stream"
+                            decrypted_count += 1
+                        else:
+                            source_type = "native_stream"
+                            native_count += 1
                         logger.info(f"[PDFService] Page {page_num + 1}/{page_count}: processed via {source_type} ({len(page_text)} chars)")
-                    else:
-                        page_text = cleaned_text or f"[Page {page_num + 1}: Scanned or non-Unicode content detected. Text stream unavailable.]"
-                        source_type = "unmapped_fallback"
-                        logger.warning(f"[PDFService] Page {page_num + 1}/{page_count}: OCR fallback unavailable.")
-                else:
-                    page_text = cleaned_text
-                    if was_encrypted or unlocked_with_empty_pass:
-                        source_type = "decrypted_stream"
-                        decrypted_count += 1
-                    else:
-                        source_type = "native_stream"
-                        native_count += 1
-                    logger.info(f"[PDFService] Page {page_num + 1}/{page_count}: processed via {source_type} ({len(page_text)} chars)")
 
-                page_provenance.append({
-                    "page_number": page_num + 1,
-                    "source": source_type,
-                    "character_count": len(page_text)
-                })
+                    page_provenance.append({
+                        "page_number": page_num + 1,
+                        "source": source_type,
+                        "character_count": len(page_text)
+                    })
 
-                if page_text.strip():
-                    full_text_pages.append(f"--- [Page {page_num + 1}] ---\n{page_text}")
+                    if page_text.strip():
+                        full_text_pages.append(f"--- [Page {page_num + 1}] ---\n{page_text}")
+                finally:
+                    del page
+                    if (page_num + 1) % 10 == 0:
+                        gc.collect()
 
             combined_text = "\n\n".join(full_text_pages)
             doc.close()
+            del doc
+            gc.collect()
 
             if not combined_text.strip():
                 combined_text = f"Document: {filename}\n[Scanned / Image-heavy PDF detected. Extracting available structural headers.]"

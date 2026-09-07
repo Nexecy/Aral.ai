@@ -64,6 +64,7 @@ class DocumentBase(BaseModel):
     filename: str
     page_count: int = 1
     file_size_bytes: int = 0
+    status: Optional[str] = "ready"
 
 class DocumentCreate(DocumentBase):
     storage_path: str
@@ -75,6 +76,7 @@ class DocumentResponse(DocumentBase):
     storage_path: str
     uploaded_at: datetime
     extracted_text: Optional[str] = ""
+    status: Optional[str] = "ready"
     model_config = ConfigDict(from_attributes=True)
 
 class DocumentUpdate(BaseModel):
