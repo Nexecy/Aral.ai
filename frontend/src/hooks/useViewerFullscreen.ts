@@ -1,41 +1,65 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+type DocWithWebkit = Document & {
+  webkitFullscreenElement?: Element | null;
+  webkitExitFullscreen?: () => Promise<void> | void;
+};
+
+type ElWithWebkit = HTMLElement & {
+  webkitRequestFullscreen?: () => Promise<void> | void;
+};
 
 function fullscreenElement(): Element | null {
-  const doc = document as Document & { webkitFullscreenElement?: Element | null };
+  const doc = document as DocWithWebkit;
   return document.fullscreenElement || doc.webkitFullscreenElement || null;
 }
 
-function requestFullscreen(el: HTMLElement): Promise<void> {
-  const req =
-    el.requestFullscreen?.bind(el) ||
-    (el as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> | void }).webkitRequestFullscreen?.bind(el);
-  if (!req) return Promise.reject(new Error('Fullscreen API unavailable'));
-  return Promise.resolve(req());
+function requestNativeFullscreen(el: HTMLElement): Promise<void> {
+  if (typeof el.requestFullscreen === 'function') {
+    try {
+      return Promise.resolve(el.requestFullscreen({ navigationUI: 'hide' }));
+    } catch {
+      return Promise.resolve(el.requestFullscreen());
+    }
+  }
+  const webkit = (el as ElWithWebkit).webkitRequestFullscreen;
+  if (typeof webkit === 'function') {
+    return Promise.resolve(webkit.call(el));
+  }
+  return Promise.reject(new Error('Fullscreen API unavailable'));
 }
 
-function exitFullscreen(): Promise<void> {
-  const doc = document as Document & { webkitExitFullscreen?: () => Promise<void> | void };
+function exitNativeFullscreen(): Promise<void> {
+  const doc = document as DocWithWebkit;
   const exit = document.exitFullscreen?.bind(document) || doc.webkitExitFullscreen?.bind(document);
   if (!exit || !fullscreenElement()) return Promise.resolve();
   return Promise.resolve(exit());
 }
 
 /**
- * True viewport-covering reader mode. Prefers the Fullscreen API (hides browser
- * chrome) and falls back to a fixed overlay when the API is missing or denied.
+ * True fullscreen for the PDF reader.
+ *
+ * CSS `position: fixed` inside the workspace is trapped by `backdrop-filter`
+ * and `overflow: hidden` ancestors, so it only fills the document card. We
+ * therefore (1) request the browser Fullscreen API on <html> to hide browser
+ * chrome, and (2) tell the caller to portal the reader onto document.body so
+ * it covers the app shell.
  */
-export function useViewerFullscreen(ref: { current: HTMLElement | null }) {
-  const [cssFallback, setCssFallback] = useState(false);
-  const [nativeActive, setNativeActive] = useState(false);
+export function useViewerFullscreen() {
+  const [overlay, setOverlay] = useState(false);
+  const htmlFsRef = useRef(false);
 
-  const isFullscreen = cssFallback || nativeActive;
+  const isFullscreen = overlay;
 
   useEffect(() => {
     const sync = () => {
-      const el = ref.current;
-      setNativeActive(Boolean(el && fullscreenElement() === el));
+      const fsEl = fullscreenElement();
+      if (htmlFsRef.current && !fsEl) {
+        htmlFsRef.current = false;
+        setOverlay(false);
+      }
     };
     document.addEventListener('fullscreenchange', sync);
     document.addEventListener('webkitfullscreenchange', sync);
@@ -43,54 +67,52 @@ export function useViewerFullscreen(ref: { current: HTMLElement | null }) {
       document.removeEventListener('fullscreenchange', sync);
       document.removeEventListener('webkitfullscreenchange', sync);
     };
-  }, [ref]);
+  }, []);
 
   useEffect(() => {
-    if (!cssFallback) return;
-    const previous = document.body.style.overflow;
+    if (!overlay) return;
+    const html = document.documentElement;
+    const prevHtml = html.style.overflow;
+    const prevBody = document.body.style.overflow;
+    html.style.overflow = 'hidden';
     document.body.style.overflow = 'hidden';
     return () => {
-      document.body.style.overflow = previous;
+      html.style.overflow = prevHtml;
+      document.body.style.overflow = prevBody;
     };
-  }, [cssFallback]);
+  }, [overlay]);
 
   const exit = useCallback(async () => {
+    htmlFsRef.current = false;
     try {
-      await exitFullscreen();
+      await exitNativeFullscreen();
     } catch {
       /* ignore */
     }
-    setCssFallback(false);
+    setOverlay(false);
   }, []);
 
-  const toggle = useCallback(async () => {
-    if (isFullscreen) {
-      await exit();
-      return;
-    }
-    const el = ref.current;
-    if (!el) {
-      setCssFallback(true);
+  const toggle = useCallback(() => {
+    if (overlay) {
+      void exit();
       return;
     }
 
-    const canNative =
-      typeof el.requestFullscreen === 'function' ||
-      typeof (el as HTMLElement & { webkitRequestFullscreen?: unknown }).webkitRequestFullscreen === 'function';
+    setOverlay(true);
 
-    if (canNative) {
-      try {
-        await requestFullscreen(el);
-        if (fullscreenElement() === el) setNativeActive(true);
-        // If the element is not promoted yet, fullscreenchange will sync it.
-        // Do not also enable the CSS overlay or Esc cannot fully exit.
-        return;
-      } catch {
-        /* permission / iOS / embedded webview */
-      }
+    // Same click turn — required for the Fullscreen API to be allowed.
+    try {
+      void requestNativeFullscreen(document.documentElement).then(() => {
+        if (fullscreenElement() === document.documentElement) {
+          htmlFsRef.current = true;
+        }
+      }).catch(() => {
+        htmlFsRef.current = false;
+      });
+    } catch {
+      htmlFsRef.current = false;
     }
-    setCssFallback(true);
-  }, [exit, isFullscreen, ref]);
+  }, [exit, overlay]);
 
-  return { isFullscreen, toggle, exit };
+  return { isFullscreen, isNativeFullscreen: false, toggle, exit };
 }

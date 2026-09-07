@@ -39,6 +39,7 @@ import { UploadProgressBar, UploadFileMeta } from '@/components/study/UploadProg
 import { useViewerFullscreen } from '@/hooks/useViewerFullscreen';
 import { useIdleChrome } from '@/hooks/useIdleChrome';
 import { isTypingTarget } from '@/hooks/useHotkeys';
+import { createPortal } from 'react-dom';
 
 export const ACCEPTED_EXTENSIONS = [
   '.pdf', '.docx', '.doc', '.txt', '.md',
@@ -105,7 +106,7 @@ function DocumentViewerImpl({
   const [chromeHovering, setChromeHovering] = useState(false);
 
   const viewerRootRef = useRef<HTMLDivElement | null>(null);
-  const { isFullscreen, toggle: toggleFullscreen, exit: exitFullscreen } = useViewerFullscreen(viewerRootRef);
+  const { isFullscreen, isNativeFullscreen, toggle: toggleFullscreen, exit: exitFullscreen } = useViewerFullscreen();
 
   const [pdfTotalPages, setPdfTotalPages] = useState<number>(document?.page_count || 1);
 
@@ -523,7 +524,10 @@ function DocumentViewerImpl({
     clearSelection();
   };
 
-  return (
+  const overlayFullscreen = isFullscreen && !isNativeFullscreen;
+  const stageBg = pdfImmersive ? 'bg-charcoal-dark' : 'bg-surface-container-lowest';
+
+  const viewer = (
     <div
       ref={viewerRootRef}
       tabIndex={-1}
@@ -540,12 +544,12 @@ function DocumentViewerImpl({
           setChromeVisible((v) => !v);
         }
       }}
-      className={`flex flex-col overflow-hidden relative transition-all duration-300 outline-none ${
-        isFullscreen
-          ? `fixed inset-0 z-[200] h-[100dvh] w-screen rounded-none border-0 shadow-none ${
-              pdfImmersive ? 'bg-charcoal-dark' : 'bg-surface-container-lowest'
-            }`
-          : 'bg-surface-container-lowest border border-outline-variant rounded-3xl'
+      className={`aral-pdf-fs-root flex flex-col overflow-hidden outline-none ${
+        overlayFullscreen
+          ? `fixed inset-0 z-[10000] h-[100dvh] w-screen max-w-none rounded-none border-0 ${stageBg}`
+          : isFullscreen
+            ? `relative w-full h-full rounded-none border-0 ${stageBg}`
+            : 'relative bg-surface-container-lowest border border-outline-variant rounded-3xl'
       }`}
       style={isFullscreen ? undefined : { height: `${height}px` }}
     >
@@ -827,6 +831,21 @@ function DocumentViewerImpl({
       />
     </div>
   );
+
+  if (overlayFullscreen && typeof window !== 'undefined') {
+    return (
+      <>
+        <div
+          aria-hidden
+          className="rounded-3xl border border-outline-variant bg-charcoal-dark/20"
+          style={{ height: `${height}px` }}
+        />
+        {createPortal(viewer, window.document.body)}
+      </>
+    );
+  }
+
+  return viewer;
 }
 
 /**
