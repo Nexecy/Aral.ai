@@ -1,4 +1,6 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+import { resolveApiBase } from './apiBase';
+
+const API_BASE = resolveApiBase();
 
 export function resolveMediaUrl(url?: string | null): string | null {
   if (!url) return null;

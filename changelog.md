@@ -5,6 +5,22 @@ All notable changes to Aral.ai are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] — 2026-09-08
+
+### Added
+- Stack health endpoint fields (`environment`, `hosted`, `anonymous_auth`, `frontend_origin`) and `scripts/check_stack.py` for local and hosted pass/fail checks.
+- GitHub Actions CI: backend pytest plus a Vercel-mode Next.js production build.
+- `render.yaml` with `/api/health` as the Render health check path.
+
+### Changed
+- CORS now uses `settings.cors_origins_list` (localhost 3000/3005, custom domains, production frontend) plus a `*.vercel.app` regex for preview deployments.
+- Dev frontend port is consistently **3005** (README, Tauri `devUrl`, env examples, `start_dev.py`).
+- Production Vercel builds fall back to the hosted Render API instead of `localhost` when `NEXT_PUBLIC_API_URL` is missing.
+- `start_dev.py` waits for API health before considering the stack ready.
+
+### Security
+- Hosted/production APIs no longer accept missing Bearer tokens or the local `demo-token` identity.
+
 ## [1.0.2] — 2026-09-07
 
 ### Added

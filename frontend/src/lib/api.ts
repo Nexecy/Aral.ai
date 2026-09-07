@@ -19,8 +19,9 @@ import {
   DashboardSummary,
   AuthSession
 } from './types';
+import { resolveApiBase, warnIfApiBaseMisconfigured } from './apiBase';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
+const API_BASE = resolveApiBase();
 
 interface CacheEntry<T = unknown> {
   data: T;
@@ -108,6 +109,7 @@ class ApiClient {
 
   /** Lightweight ping to wake up free-tier backend host upon landing */
   async pingBackend(): Promise<boolean> {
+    warnIfApiBaseMisconfigured(API_BASE);
     try {
       const res = await fetch(`${API_BASE}/health`, { method: 'GET' });
       return res.ok;

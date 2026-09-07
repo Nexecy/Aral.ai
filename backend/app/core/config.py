@@ -3,6 +3,28 @@ from typing import List
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 
+# Always allowed in local/dev, even if CORS_ORIGINS is overridden.
+LOCAL_FRONTEND_ORIGINS = (
+    "http://localhost:3000",
+    "http://localhost:3005",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3005",
+    "http://localhost",
+    "tauri://localhost",
+    "capacitor://localhost",
+)
+
+# Localhost on any port, plus every Vercel production/preview hostname.
+CORS_ORIGIN_REGEX = (
+    r"^https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?$"
+    r"|^https://.+\.vercel\.app$"
+)
+
+
+def _normalize_origin(url: str) -> str:
+    return (url or "").strip().rstrip("/")
+
+
 class Settings(BaseSettings):
     ENVIRONMENT: str = Field(default="development")
     PORT: int = Field(default=8000)
@@ -25,13 +47,19 @@ class Settings(BaseSettings):
     SMTP_FROM_NAME: str = Field(default="Aral.ai")
     SUPPORT_EMAIL: str = Field(default="aral.ai.app@gmail.com")
 
-    FRONTEND_URL: str = Field(default="http://localhost:3000")
+    FRONTEND_URL: str = Field(default="http://localhost:3005")
     # Used when the API is hosted (Render) but FRONTEND_URL was left on localhost.
     PRODUCTION_FRONTEND_URL: str = Field(default="https://aral-ai-three.vercel.app")
 
-    # CORS
+    # Extra CORS origins (comma-separated). Merged with LOCAL_FRONTEND_ORIGINS
+    # and the live frontend URLs so a custom domain still works in production.
     CORS_ORIGINS: str = Field(
-        default="http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001,tauri://localhost,capacitor://localhost"
+        default=(
+            "http://localhost:3000,http://localhost:3005,"
+            "http://127.0.0.1:3000,http://127.0.0.1:3005,"
+            "https://aral-ai.vercel.app,https://aral-ai-three.vercel.app,"
+            "tauri://localhost,capacitor://localhost"
+        )
     )
 
     # PDF Processing & OCR Optimization
@@ -42,20 +70,48 @@ class Settings(BaseSettings):
     GEMINI_OCR_DELAY_SECONDS: float = Field(default=4.2, description="Mandatory delay between consecutive Gemini Vision calls to stay strictly under 15 RPM")
 
     @property
+    def is_hosted(self) -> bool:
+        return bool(os.getenv("RENDER") or os.getenv("RENDER_EXTERNAL_URL"))
+
+    @property
+    def is_production(self) -> bool:
+        env = (self.ENVIRONMENT or "").strip().lower()
+        return env in {"production", "prod"} or self.is_hosted
+
+    @property
+    def allow_anonymous_auth(self) -> bool:
+        """Local/dev may use the single-user identity. Hosted APIs must not."""
+        return not self.is_production
+
+    @property
     def frontend_origin(self) -> str:
-        url = (self.FRONTEND_URL or "").strip().rstrip("/")
-        hosted = bool(os.getenv("RENDER") or os.getenv("RENDER_EXTERNAL_URL"))
+        url = _normalize_origin(self.FRONTEND_URL)
         local = (not url) or ("localhost" in url) or ("127.0.0.1" in url)
-        if hosted and local:
-            return (self.PRODUCTION_FRONTEND_URL or "https://aral-ai-three.vercel.app").rstrip("/")
-        return url or "http://localhost:3000"
+        if self.is_hosted and local:
+            return _normalize_origin(self.PRODUCTION_FRONTEND_URL) or "https://aral-ai-three.vercel.app"
+        return url or "http://localhost:3005"
+
+    @property
+    def cors_origin_regex(self) -> str:
+        return CORS_ORIGIN_REGEX
 
     @property
     def cors_origins_list(self) -> List[str]:
-        origins = [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
-        live = self.frontend_origin
-        if live and live not in origins:
-            origins.append(live)
+        seen = set()
+        origins: List[str] = []
+
+        def add(raw: str) -> None:
+            origin = _normalize_origin(raw)
+            if origin and origin not in seen:
+                seen.add(origin)
+                origins.append(origin)
+
+        for origin in LOCAL_FRONTEND_ORIGINS:
+            add(origin)
+        for origin in self.CORS_ORIGINS.split(","):
+            add(origin)
+        add(self.frontend_origin)
+        add(self.PRODUCTION_FRONTEND_URL)
         return origins
 
     @property

@@ -1,4 +1,4 @@
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, NoReturn
 
 import jwt
 from fastapi import Depends, Header, HTTPException, status
@@ -138,18 +138,27 @@ def _decode_user_token(token: str) -> Dict[str, Any]:
     )
 
 
+def _reject_anonymous() -> NoReturn:
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Authorization required. Sign in and send a Bearer token.",
+    )
+
+
 async def get_current_user(
     authorization: Optional[str] = Header(None)
 ) -> Dict[str, Any]:
     """
     Resolve the caller from Authorization: Bearer <token>.
 
-    Missing tokens and the test sentinel `demo-token` map to the local
-    single-user identity. Any other presented token is verified and never
-    remapped onto that identity.
+    In local development, missing tokens and the test sentinel `demo-token`
+    map to a single-user identity so pytest and offline use keep working.
+    Hosted/production APIs require a verified token.
     """
     if not authorization:
-        return LOCAL_USER
+        if settings.allow_anonymous_auth:
+            return LOCAL_USER
+        _reject_anonymous()
 
     parts = authorization.split(" ")
     if len(parts) != 2 or parts[0].lower() != "bearer":
@@ -160,7 +169,12 @@ async def get_current_user(
 
     token = parts[1]
     if token == "demo-token":
-        return LOCAL_USER
+        if settings.allow_anonymous_auth:
+            return LOCAL_USER
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Demo token is not allowed outside local development.",
+        )
 
     return _decode_user_token(token)
 

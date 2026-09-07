@@ -9,6 +9,7 @@ import { AppShell } from '@/components/layout/AppShell';
 import { ThemePreferencesSync } from '@/components/layout/ThemePreferencesSync';
 import { CookieConsent } from '@/components/common/CookieConsent';
 import { BRAND_LOGO_FALLBACK, BRAND_LOGO_URL } from '@/lib/brand';
+import { resolveApiBase } from '@/lib/apiBase';
 
 const hanken = Hanken_Grotesk({
   subsets: ['latin'],
@@ -25,10 +26,8 @@ const jetbrains = JetBrains_Mono({
 });
 
 function apiOrigin(): string | null {
-  const raw = process.env.NEXT_PUBLIC_API_URL;
-  if (!raw) return null;
   try {
-    return new URL(raw).origin;
+    return new URL(resolveApiBase()).origin;
   } catch {
     return null;
   }

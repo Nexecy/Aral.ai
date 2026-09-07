@@ -1,10 +1,10 @@
-import os
 import traceback
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from app.core.config import settings
+from app.core.stack_health import APP_VERSION, build_health_payload
 
 from app.routers import (
     auth,
@@ -22,7 +22,7 @@ from app.routers import (
 app = FastAPI(
     title="Aral.ai API",
     description="Cross-platform AI Study Application Backend with Google Gemini, Supabase, and PyMuPDF",
-    version="1.0.0",
+    version=APP_VERSION,
     docs_url="/docs",
     redoc_url="/redoc"
 )
@@ -30,20 +30,11 @@ app = FastAPI(
 # Enable automatic gzip compression for responses >= 500 bytes
 app.add_middleware(GZipMiddleware, minimum_size=500)
 
-# Configure CORS for Next.js, Capacitor mobile, Tauri desktop, and Vercel
+# Configure CORS from settings so Vercel, custom domains, and local ports stay in sync.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:3005",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:3005",
-        "capacitor://localhost",
-        "http://localhost",
-        "https://aral-ai.vercel.app",
-        "https://aral-ai-three.vercel.app",
-    ],
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?$|^https://.*\.vercel\.app$",
+    allow_origins=settings.cors_origins_list,
+    allow_origin_regex=settings.cors_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -74,15 +65,7 @@ app.include_router(contact.router, prefix="/api")
 @app.get("/")
 @app.get("/api/health")
 async def root():
-    return {
-        "app": "Aral.ai API",
-        "version": "1.0.0",
-        "status": "operational",
-        "docs": "/docs",
-        "mode": "hybrid",
-        "gemini_active": settings.has_gemini_key,
-        "supabase_active": settings.has_supabase_credentials
-    }
+    return build_health_payload()
 
 if __name__ == "__main__":
     import uvicorn

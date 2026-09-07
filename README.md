@@ -52,6 +52,22 @@ Adheres strictly to the **Notion Design System** — warm paper canvas (`#f6f5f4
 
 ## 🚀 Quick Start
 
+Copy `backend/.env.example` to `backend/.env` and `frontend/.env.example` to `frontend/.env.local`, then fill in Gemini and Supabase keys.
+
+### One command (recommended)
+```bash
+python start_dev.py
+```
+
+This starts FastAPI on **http://localhost:8000** and Next.js on **http://localhost:3005**, then waits until `/api/health` responds.
+
+Confirm the stack:
+```bash
+python scripts/check_stack.py
+# On a hosted API:
+python scripts/check_stack.py --base-url https://aral-ai.onrender.com --require-gemini --require-supabase
+```
+
 ### 1. Backend (FastAPI)
 ```bash
 cd backend
@@ -72,7 +88,7 @@ python -m uvicorn app.main:app --reload --port 8000
 cd frontend
 npm install
 
-# Run dev server on http://localhost:3000
+# Run dev server on http://localhost:3005
 npm run dev
 
 # Or build static export bundle for Capacitor/Tauri:
@@ -88,8 +104,31 @@ cd backend
 venv\Scripts\pytest
 ```
 
+CI (GitHub Actions) runs backend pytest and a Vercel-mode Next.js production build on every push to `main`.
+
 ---
 
 ## 🗄️ Supabase PostgreSQL Setup
 
-Copy the SQL statements in [`supabase/schema.sql`](file:///e:/2026%20Projects/Aral.ai/supabase/schema.sql) and run them inside your Supabase project's SQL Editor to set up tables, indexes, and Row Level Security (RLS) policies.
+1. Run [`supabase/schema.sql`](supabase/schema.sql) in the Supabase SQL Editor (tables, indexes, RLS).
+2. Run [`supabase/profiles.sql`](supabase/profiles.sql) for profiles, avatars bucket, and related policies.
+
+---
+
+## ☁️ Deployment
+
+**Frontend (Vercel)**  
+- Root directory: `frontend`  
+- Framework: Next.js (do **not** use static export on Vercel — `next.config.mjs` keeps a server build when `VERCEL=1`)  
+- Environment variable: `NEXT_PUBLIC_API_URL=https://aral-ai.onrender.com/api`  
+  (required for production; without it the client would try localhost)
+
+**Backend (Render)**  
+- Root directory: `backend`  
+- Start: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`  
+- Health check: `/api/health`  
+- Set `ENVIRONMENT=production` (anonymous demo-token auth is disabled on Render automatically)  
+- Set `FRONTEND_URL` to the Vercel origin (e.g. `https://aral-ai-three.vercel.app`)  
+- CORS allows `*.vercel.app` preview deployments and any extra origins in `CORS_ORIGINS`
+
+The landing page pings `/api/health` so a sleeping free-tier API can wake up.
