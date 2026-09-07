@@ -109,11 +109,64 @@ class GeminiService:
                     if isinstance(term, dict) and term.get("term")
                 ],
             })
-        return {
+        excerpt: Dict[str, Any] = {
             "title": notes_json.get("title"),
             "summary": notes_json.get("summary"),
+            "document_type": notes_json.get("document_type", "general"),
             "sections": sections,
         }
+        if notes_json.get("cases"):
+            excerpt["cases"] = [
+                {
+                    "case_name": c.get("case_name"),
+                    "citation": c.get("citation"),
+                    "ponente": c.get("ponente"),
+                    "issue": (c.get("issue") or "")[:200],
+                    "ruling": (c.get("ruling") or "")[:350],
+                    "doctrine_applied": c.get("doctrine_applied")
+                }
+                for c in notes_json.get("cases")[:10]
+                if isinstance(c, dict) and c.get("case_name")
+            ]
+        if notes_json.get("doctrines"):
+            excerpt["doctrines"] = [
+                {
+                    "name": d.get("name"),
+                    "statement": (d.get("statement") or "")[:250],
+                    "elements": (d.get("elements") or [])[:6],
+                    "exceptions": (d.get("exceptions") or [])[:4],
+                    "statutory_basis": d.get("statutory_basis"),
+                    "supporting_cases": (d.get("supporting_cases") or [])[:4]
+                }
+                for d in notes_json.get("doctrines")[:10]
+                if isinstance(d, dict) and d.get("name")
+            ]
+        return excerpt
+
+    @staticmethod
+    def _is_legal_material(text: str, title: str) -> bool:
+        """
+        Detect if document contains legal text, court jurisprudence, case digests,
+        statutes, or law school review materials.
+        """
+        combined = f"{title}\n{text[:12000]}".lower()
+        legal_keywords = [
+            "g.r. no", "scra", "phil.", "v.", "vs.", "versus", "supreme court",
+            "court of appeals", "sandiganbayan", "petitioner", "respondent",
+            "appellant", "appellee", "plaintiff", "defendant", "ponente",
+            "jurisprudence", "doctrine", "ratio decidendi", "stare decisis",
+            "oblicon", "consti", "crimlaw", "remedial law", "taxation law",
+            "statutory construction", "civil code", "penal code", "rules of court",
+            "case digest", "facts:", "issue:", "held:", "ruling:", "dispositive",
+            "intergenerational responsibility", "operative fact", "police power",
+            "due process", "equal protection", "mens rea", "actus reus"
+        ]
+        match_count = sum(1 for term in legal_keywords if term in combined)
+        has_gr_num = bool(re.search(r"\bg\.?r\.?\s*no\.?\s*[\w\-]+", combined, re.IGNORECASE))
+        has_case_v = bool(re.search(r"\b[a-z0-9\.\'\-]+\s+(?:v\.|vs\.|versus)\s+[a-z0-9\.\'\-]+", combined, re.IGNORECASE))
+        has_fir_block = bool(re.search(r"\b(?:facts|issue|held|ruling)\s*:", combined, re.IGNORECASE))
+
+        return match_count >= 2 or has_gr_num or (has_case_v and has_fir_block)
 
     async def _try_generate_json(self, prompt: str) -> Optional[Any]:
         """
@@ -154,17 +207,94 @@ class GeminiService:
 
     async def generate_notes(self, text: str, document_title: str) -> Dict[str, Any]:
         """
-        Generate structured notes (title, summary, sections with headings, subpoints, key terms)
+        Generate structured notes (title, summary, sections with headings, subpoints, key terms,
+        and for legal materials: case digests with FIRAC and legal doctrines with elements & exceptions)
         using Gemini JSON mode, falling back to dynamic document text extraction.
         """
         clean_title = document_title.replace(".pdf", "").replace(".docx", "").replace(".txt", "").strip()
-        
-        prompt = f"""You are an expert educational AI tutor. Analyze the following study material from '{document_title}' and generate comprehensive, structured study notes based strictly on the text.
+        is_legal = self._is_legal_material(text, document_title)
+
+        if is_legal:
+            prompt = f"""You are an elite legal scholar and law school bar review tutor.
+Analyze the following law study material from '{document_title}' and generate a comprehensive, structured legal reviewer tailored for law students and bar reviewees based strictly on the text.
+
+Extract the following:
+1. "cases": Any Supreme Court decisions, landmark cases, or case digests mentioned, with:
+   - "case_name": Title of case (e.g. "Oposa v. Factoran, Jr." or "People v. Santos")
+   - "citation": Official citation / docket (e.g. "G.R. No. 101083, July 30, 1993, 224 SCRA 792")
+   - "date": Promulgation date if stated
+   - "ponente": Authoring Justice (e.g. "Davide, Jr., J.")
+   - "facts": Concise summary of essential operative facts and procedural history
+   - "issue": The precise legal / constitutional issue resolved
+   - "ruling": Definitive holding and ratio decidendi of the Court
+   - "doctrine_applied": The legal doctrine, test, or rule established/applied
+
+2. "doctrines": All legal doctrines, principles, and rules of law analyzed:
+   - "name": Official doctrine name (e.g. "Doctrine of Intergenerational Responsibility", "Doctrine of Operative Fact", "Exclusionary Rule")
+   - "statement": Authoritative statement and rule of law
+   - "elements": Array of required elements / requisites to invoke or prove the doctrine
+   - "exceptions": Array of recognized exceptions or limitations
+   - "statutory_basis": Applicable constitutional, statutory, or codal article (e.g. "Art. II, Sec. 16, 1987 Constitution")
+   - "supporting_cases": Array of case names cited for this doctrine
+
+3. "sections": 3 to 8 structured sections covering all key legal concepts, statutory provisions, and principles:
+   - "heading": Clear section title
+   - "subpoints": 2 to 6 high-yield bullet points explaining legal mechanics and application
+   - "key_terms": 1 to 4 key legal terms, maxims, or Latin phrases with definitions
+
+Return JSON matching this schema:
+{{
+  "title": "Legal Study Notes: {clean_title}",
+  "summary": "2-3 clear sentences summarizing core doctrines, cases, and principles in this material",
+  "document_type": "law",
+  "cases": [
+    {{
+      "id": "case-1",
+      "case_name": "Full Case Name",
+      "citation": "G.R. No. / Citation",
+      "date": "Date",
+      "ponente": "Ponente",
+      "facts": "Concise operative facts...",
+      "issue": "Legal issue...",
+      "ruling": "Holding & ratio decidendi...",
+      "doctrine_applied": "Applied doctrine..."
+    }}
+  ],
+  "doctrines": [
+    {{
+      "id": "doc-1",
+      "name": "Doctrine Name",
+      "statement": "Rule of law statement...",
+      "elements": ["Element 1", "Element 2"],
+      "exceptions": ["Exception 1"],
+      "statutory_basis": "Statute / Constitutional provision",
+      "supporting_cases": ["Case Name"]
+    }}
+  ],
+  "sections": [
+    {{
+      "heading": "Section Heading",
+      "subpoints": ["Bullet 1", "Bullet 2"],
+      "key_terms": [
+        {{ "term": "Legal Concept", "definition": "Precise definition" }}
+      ]
+    }}
+  ]
+}}
+
+Source Material:
+{text[:45000]}
+"""
+        else:
+            prompt = f"""You are an expert educational AI tutor. Analyze the following study material from '{document_title}' and generate comprehensive, structured study notes based strictly on the text.
 
 Return JSON with this schema:
 {{
   "title": "Study Notes: {clean_title}",
   "summary": "2-3 clear sentences summarizing the core concepts and key takeaways from the text",
+  "document_type": "general",
+  "cases": [],
+  "doctrines": [],
   "sections": [
     {{
       "heading": "Clear Section Heading",
@@ -188,12 +318,18 @@ Requirements:
 3. Base everything strictly on the provided source content. Return valid JSON only with no preamble.
 
 Source Material:
-{text[:25000]}
+{text[:28000]}
 """
         parsed = await self._try_generate_json(prompt)
         if parsed and isinstance(parsed, dict) and "sections" in parsed and len(parsed["sections"]) > 0:
             if not parsed.get("title"):
                 parsed["title"] = f"Study Guide: {clean_title}"
+            if "cases" not in parsed or not isinstance(parsed["cases"], list):
+                parsed["cases"] = []
+            if "doctrines" not in parsed or not isinstance(parsed["doctrines"], list):
+                parsed["doctrines"] = []
+            if not parsed.get("document_type"):
+                parsed["document_type"] = "law" if (parsed["cases"] or parsed["doctrines"] or is_legal) else "general"
             return parsed
 
         # Dynamic fallback parser extracting real concepts from PDF text
@@ -362,7 +498,12 @@ Notes:
         Uses resilient model cascading and falls back to context-grounded simulated streaming.
         """
         notes_summary = self._compact(self._notes_excerpt(notes_content), 8000)
-        system_context = f"""You are Aral.ai, an encouraging, knowledgeable study assistant for '{session_title}'.
+        is_law = notes_content.get("document_type") == "law" or bool(notes_content.get("cases")) or bool(notes_content.get("doctrines"))
+        legal_guidance = (
+            "\nYou are tutoring a law student. When answering legal queries, provide structured legal reasoning using the IRAC method (Issue, Rule, Application, Conclusion). Accurately reference the jurisprudence, G.R. numbers, and doctrines in the notes."
+            if is_law else ""
+        )
+        system_context = f"""You are Aral.ai, an encouraging, knowledgeable study assistant for '{session_title}'.{legal_guidance}
 Notes Reference: {notes_summary}
 Answer clearly in Markdown with rich formatting. Use bolding and bullet points.
 Write formulas in plain text or Unicode (e.g. 1.01^365 = 37.78, Cue -> Craving). Never wrap math in $...$ or use LaTeX commands.
@@ -544,13 +685,160 @@ If the student asks to change or add notes, you may include a [NOTE_UPDATE] JSON
         summary_text = " ".join(first_subpoints[:2]) if first_subpoints else f"Comprehensive review and study guide for {clean_title}."
         if not summary_text.endswith("."):
             summary_text += "."
-        summary_text += f" Synthesizes {len(sections_data)} major sections and {sum(len(s['key_terms']) for s in sections_data)} key definitions."
+
+        # Extract legal insights (case briefs, doctrines, requisites) if present
+        cases_data, doctrines_data = self._extract_legal_insights_heuristic(filtered_lines, clean_title)
+        is_law = bool(cases_data or doctrines_data or self._is_legal_material(text, title))
+        
+        if is_law:
+            summary_text += f" Law reviewer: synthesized {len(sections_data)} core topics, {len(cases_data)} jurisprudence case briefs, and {len(doctrines_data)} legal doctrines."
+        else:
+            summary_text += f" Synthesizes {len(sections_data)} major sections and {sum(len(s['key_terms']) for s in sections_data)} key definitions."
 
         return {
             "title": f"Study Notes: {clean_title}",
             "summary": summary_text,
-            "sections": sections_data
+            "document_type": "law" if is_law else "general",
+            "sections": sections_data,
+            "cases": cases_data,
+            "doctrines": doctrines_data
         }
+
+    def _extract_legal_insights_heuristic(self, lines: List[str], clean_title: str) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+        """
+        Heuristic extraction of legal cases (FIRAC format) and legal doctrines with elements.
+        """
+        cases: List[Dict[str, Any]] = []
+        doctrines: List[Dict[str, Any]] = []
+
+        current_case: Optional[Dict[str, Any]] = None
+        active_field: Optional[str] = None
+        case_v_pattern = re.compile(r"^([A-Z0-9\.\,\'\-\s]+(?:\s+(?:v\.|vs\.|versus)\s+)[A-Z0-9\.\,\'\-\s]+)", re.IGNORECASE)
+        gr_pattern = re.compile(r"\b(G\.?R\.?\s*No\.?\s*[\w\-]+(?:,\s*[A-Za-z]+\s+\d+,\s+\d+)?(?:\s*,\s*\d+\s+SCRA\s+\d+)?)", re.IGNORECASE)
+        ponente_pattern = re.compile(r"(?:Ponente|Justice|J\.)\s*:\s*([A-Za-z\.\,\s]+)", re.IGNORECASE)
+
+        for line in lines:
+            # Check for case caption
+            m_v = case_v_pattern.match(line)
+            if m_v and len(line) < 130 and not line.lower().startswith("in re"):
+                if current_case and current_case.get("case_name") and (current_case.get("ruling") or current_case.get("facts") or current_case.get("citation")):
+                    cases.append(current_case)
+                c_name = m_v.group(1).strip(",;: ")
+                if c_name.isupper():
+                    c_name = c_name.title()
+                current_case = {
+                    "id": f"case-{len(cases) + 1}",
+                    "case_name": c_name,
+                    "citation": "",
+                    "date": "",
+                    "ponente": "",
+                    "facts": "",
+                    "issue": "",
+                    "ruling": "",
+                    "doctrine_applied": ""
+                }
+                active_field = None
+                continue
+
+            # Check for G.R. No. / citation
+            m_gr = gr_pattern.search(line)
+            if m_gr:
+                if current_case:
+                    current_case["citation"] = m_gr.group(1).strip()
+                elif not cases:
+                    current_case = {
+                        "id": f"case-{len(cases) + 1}",
+                        "case_name": clean_title,
+                        "citation": m_gr.group(1).strip(),
+                        "date": "",
+                        "ponente": "",
+                        "facts": "",
+                        "issue": "",
+                        "ruling": "",
+                        "doctrine_applied": ""
+                    }
+
+            # Ponente
+            m_pon = ponente_pattern.search(line)
+            if m_pon and current_case:
+                current_case["ponente"] = m_pon.group(1).strip()
+
+            # FIRAC field headers
+            if re.match(r"^(?:FACTS|FACTUAL ANTECEDENTS|STATEMENT OF FACTS)\s*:", line, re.IGNORECASE):
+                active_field = "facts"
+                content = re.sub(r"^(?:FACTS|FACTUAL ANTECEDENTS|STATEMENT OF FACTS)\s*:\s*", "", line, flags=re.IGNORECASE).strip()
+                if current_case and content:
+                    current_case["facts"] += content + " "
+                continue
+            elif re.match(r"^(?:ISSUE|ISSUES|LEGAL ISSUE)\s*:", line, re.IGNORECASE):
+                active_field = "issue"
+                content = re.sub(r"^(?:ISSUE|ISSUES|LEGAL ISSUE)\s*:\s*", "", line, flags=re.IGNORECASE).strip()
+                if current_case and content:
+                    current_case["issue"] += content + " "
+                continue
+            elif re.match(r"^(?:HELD|RULING|RATIO DECIDENDI|COURT RULING|DECISION)\s*:", line, re.IGNORECASE):
+                active_field = "ruling"
+                content = re.sub(r"^(?:HELD|RULING|RATIO DECIDENDI|COURT RULING|DECISION)\s*:\s*", "", line, flags=re.IGNORECASE).strip()
+                if current_case and content:
+                    current_case["ruling"] += content + " "
+                continue
+            elif re.match(r"^(?:DOCTRINE|DOCTRINE APPLIED|LEGAL PRINCIPLE)\s*:", line, re.IGNORECASE):
+                active_field = "doctrine_applied"
+                content = re.sub(r"^(?:DOCTRINE|DOCTRINE APPLIED|LEGAL PRINCIPLE)\s*:\s*", "", line, flags=re.IGNORECASE).strip()
+                if current_case and content:
+                    current_case["doctrine_applied"] += content + " "
+                continue
+
+            if current_case and active_field and len(current_case.get(active_field, "")) < 1200:
+                if line and not line.startswith("#") and not line.startswith("---"):
+                    current_case[active_field] = (current_case.get(active_field, "") + " " + line).strip()
+
+        if current_case and current_case.get("case_name") and (current_case.get("ruling") or current_case.get("facts") or current_case.get("citation")):
+            cases.append(current_case)
+
+        # 2. Extract doctrines (e.g. "Doctrine of ...", "Principle of ...", "Rule on ...")
+        doctrine_heading_re = re.compile(r"\b((?:Doctrine|Principle)\s+of\s+[A-Za-z\s\-]+|Rule\s+on\s+[A-Za-z\s\-]+|Void-for-Vagueness|Exclusionary Rule|Operative Fact|Command Responsibility|Stare Decisis)", re.IGNORECASE)
+
+        for idx, line in enumerate(lines):
+            m_doc = doctrine_heading_re.search(line)
+            if m_doc and len(line) < 100:
+                doc_name = m_doc.group(1).strip()
+                if not any(d["name"].lower() == doc_name.lower() for d in doctrines):
+                    current_doc = {
+                        "id": f"doc-{len(doctrines) + 1}",
+                        "name": doc_name.title(),
+                        "statement": "",
+                        "elements": [],
+                        "exceptions": [],
+                        "statutory_basis": "",
+                        "supporting_cases": []
+                    }
+                    # Next lines might be the statement, requisites, and exceptions
+                    active_sub = "elements"
+                    for next_line in lines[idx + 1:idx + 16]:
+                        if not next_line:
+                            continue
+                        if re.match(r"^(?:requisites|elements)\s*:", next_line, re.IGNORECASE):
+                            active_sub = "elements"
+                            continue
+                        if re.match(r"^(?:exceptions?)\s*:", next_line, re.IGNORECASE):
+                            active_sub = "exceptions"
+                            continue
+                        if re.match(r"^(?:\d+[\.\)]|[a-z][\.\)]|•|\-)\s*", next_line):
+                            clean_elem = re.sub(r"^(?:\d+[\.\)]|[a-z][\.\)]|•|\-)\s*", "", next_line).strip()
+                            if len(clean_elem) > 6:
+                                if active_sub == "exceptions":
+                                    current_doc["exceptions"].append(clean_elem)
+                                else:
+                                    current_doc["elements"].append(clean_elem)
+                        elif not current_doc["statement"] and len(next_line) > 20 and not re.search(r"^(?:requisites|elements|exceptions)", next_line, re.IGNORECASE):
+                            current_doc["statement"] = next_line.strip()
+
+                    if not current_doc["statement"]:
+                        current_doc["statement"] = f"Authoritative legal doctrine recognizing {doc_name} under applicable jurisprudence."
+                    doctrines.append(current_doc)
+
+        return cases, doctrines
 
     def _fallback_notes(self, title: str, text: str) -> Dict[str, Any]:
         """
@@ -560,16 +848,71 @@ If the student asks to change or add notes, you may include a [NOTE_UPDATE] JSON
 
     def _fallback_flashcards(self, notes: Dict[str, Any], count: int = 8) -> List[Dict[str, Any]]:
         """
-        Dynamically builds flashcard pairs from the actual key terms and subpoints in notes.
+        Dynamically builds flashcard pairs from actual key terms, subpoints,
+        legal cases (holdings), and legal doctrines (elements & statements).
         """
         cards: List[Dict[str, Any]] = []
         sections = notes.get("sections", [])
+        cases = notes.get("cases", [])
+        doctrines = notes.get("doctrines", [])
         order = 0
 
-        # 1. Primary source: Key Terms & Definitions from actual notes
+        # 1. Jurisprudence Cases (Holdings & Doctrines)
+        for c in cases:
+            if order >= count:
+                break
+            c_name = c.get("case_name") or "Landmark Case"
+            citation = f" ({c.get('citation')})" if c.get("citation") else ""
+            if c.get("ruling"):
+                issue_prompt = f" on the issue of: {c.get('issue')[:140]}" if c.get("issue") else ""
+                cards.append({
+                    "front": f"In {c_name}{citation}, what was the Court's ruling{issue_prompt}?",
+                    "back": c.get("ruling"),
+                    "order_index": order
+                })
+                order += 1
+            if c.get("doctrine_applied") and order < count:
+                cards.append({
+                    "front": f"What doctrine or legal principle was established or applied in {c_name}{citation}?",
+                    "back": c.get("doctrine_applied"),
+                    "order_index": order
+                })
+                order += 1
+
+        # 2. Legal Doctrines (Statements, Requisites, Exceptions)
+        for d in doctrines:
+            if order >= count:
+                break
+            d_name = d.get("name") or "Legal Doctrine"
+            if d.get("statement") and order < count:
+                cards.append({
+                    "front": f"What is the {d_name} and its core statement under jurisprudence?",
+                    "back": d.get("statement"),
+                    "order_index": order
+                })
+                order += 1
+            if d.get("elements") and len(d.get("elements")) > 0 and order < count:
+                elements_text = "\n".join([f"{i + 1}. {e}" for i, e in enumerate(d.get("elements"))])
+                cards.append({
+                    "front": f"What are the essential requisites / elements of the {d_name}?",
+                    "back": elements_text,
+                    "order_index": order
+                })
+                order += 1
+            if d.get("exceptions") and len(d.get("exceptions")) > 0 and order < count:
+                exceptions_text = "\n".join([f"• {ex}" for ex in d.get("exceptions")])
+                cards.append({
+                    "front": f"What are the recognized exceptions or limits to the {d_name}?",
+                    "back": exceptions_text,
+                    "order_index": order
+                })
+                order += 1
+
+        # 3. Key Terms & Definitions from sections
         for s in sections:
-            heading = s.get("heading", "Key Concept")
             for kt in s.get("key_terms", []):
+                if order >= count:
+                    break
                 term = kt.get("term")
                 definition = kt.get("definition")
                 if term and definition:
@@ -580,12 +923,12 @@ If the student asks to change or add notes, you may include a [NOTE_UPDATE] JSON
                     })
                     order += 1
 
-        # 2. Secondary source: Core Subpoints
+        # 4. Core Subpoints
         for s in sections:
             heading = s.get("heading", "Study Topic")
             clean_heading = re.sub(r"^\d+[\.\)]\s*", "", heading)
             for sp in s.get("subpoints", []):
-                if order >= count * 2:
+                if order >= count:
                     break
                 if len(sp) > 20:
                     cards.append({
@@ -595,7 +938,7 @@ If the student asks to change or add notes, you may include a [NOTE_UPDATE] JSON
                     })
                     order += 1
 
-        # 3. Fallback if empty notes
+        # Fallback if empty notes
         if not cards:
             title = notes.get("title", "Study Material")
             summary = notes.get("summary", "Key concepts and review guide.")
@@ -611,14 +954,23 @@ If the student asks to change or add notes, you may include a [NOTE_UPDATE] JSON
 
     def _fallback_quiz(self, notes: Dict[str, Any], quiz_type: str, count: int = 5) -> List[Dict[str, Any]]:
         """
-        Dynamically generates quiz questions from the actual terms, definitions,
-        and subpoints in notes with distractors generated from the same document.
+        Dynamically generates quiz questions from actual terms, definitions,
+        cases, and doctrines with distractors generated from the same document.
         """
         sections = notes.get("sections", [])
+        cases = notes.get("cases", [])
+        doctrines = notes.get("doctrines", [])
         
-        # Collect all real terms and definitions from the notes
-        all_terms_defs: List[Tuple[str, str, str]] = [] # (term, definition, heading)
-        all_subpoints: List[Tuple[str, str]] = [] # (subpoint, heading)
+        all_terms_defs: List[Tuple[str, str, str]] = []
+        all_subpoints: List[Tuple[str, str]] = []
+
+        # Add legal doctrines and cases to pool
+        for d in doctrines:
+            if d.get("name") and d.get("statement"):
+                all_terms_defs.append((d["name"], d["statement"], "Legal Doctrines"))
+        for c in cases:
+            if c.get("case_name") and c.get("ruling"):
+                all_terms_defs.append((c["case_name"], c["ruling"], "Jurisprudence"))
 
         for s in sections:
             heading = s.get("heading", "Core Topic")
@@ -640,32 +992,35 @@ If the student asks to change or add notes, you may include a [NOTE_UPDATE] JSON
 
             for i, (term, definition, heading) in enumerate(all_terms_defs[:count]):
                 clean_heading = re.sub(r"^\d+[\.\)]\s*", "", heading)
-                
-                # Pick 3 unique distractors from other definitions/subpoints in the document
                 other_defs = [d for d in available_defs if d != definition]
                 random.seed(i * 17)
                 if len(other_defs) >= 3:
                     distractors = random.sample(other_defs, 3)
                 else:
                     distractors = other_defs + [
-                        f"A non-essential auxiliary process unrelated to {term}",
-                        f"An outdated theoretical framework superseded by {clean_heading}",
-                        "An inverse inverse operation with negative feedback loop"
+                        f"A non-essential auxiliary doctrine superseded by {clean_heading}",
+                        f"An inapplicable rule not recognized in this jurisdiction",
+                        "An inverse presumption without statutory basis"
                     ][:3 - len(other_defs)]
 
                 options = [definition] + distractors
                 random.shuffle(options)
 
+                prompt_question = (
+                    f"Under jurisprudence, what was the Court's ruling in '{term}'?"
+                    if heading == "Jurisprudence"
+                    else f"Which of the following accurately states or defines the '{term}'?"
+                )
+
                 questions.append({
                     "id": f"q{i + 1}",
                     "type": "multiple_choice",
-                    "question": f"Which of the following best defines or describes '{term}'?",
+                    "question": prompt_question,
                     "options": options,
                     "correct_answer": definition,
-                    "explanation": f"In '{clean_heading}', {term} is defined as: {definition}"
+                    "explanation": f"Under {clean_heading}, {term}: {definition}"
                 })
 
-            # If we need more questions, create from subpoints
             if len(questions) < count and all_subpoints:
                 for j, (sp, heading) in enumerate(all_subpoints):
                     if len(questions) >= count:
@@ -673,8 +1028,8 @@ If the student asks to change or add notes, you may include a [NOTE_UPDATE] JSON
                     clean_h = re.sub(r"^\d+[\.\)]\s*", "", heading)
                     other_sps = [s[0] for s in all_subpoints if s[0] != sp]
                     distractors = other_sps[:3] if len(other_sps) >= 3 else [
-                        "It contradicts the core findings of this section.",
-                        "It is irrelevant to the overall subject matter.",
+                        "It contradicts the established legal doctrine of this case.",
+                        "It is inapplicable to the facts and procedural issues.",
                         "It applies exclusively in hypothetical conditions."
                     ]
                     opts = [sp] + distractors[:3]
@@ -685,7 +1040,7 @@ If the student asks to change or add notes, you may include a [NOTE_UPDATE] JSON
                         "question": f"According to the notes on '{clean_h}', which statement is accurate?",
                         "options": opts,
                         "correct_answer": sp,
-                        "explanation": f"Under '{clean_h}', the key finding is: {sp}"
+                        "explanation": f"Under '{clean_h}', the key principle is: {sp}"
                     })
 
             return questions[:count]
@@ -695,12 +1050,17 @@ If the student asks to change or add notes, you may include a [NOTE_UPDATE] JSON
             questions = []
             for i, (term, definition, heading) in enumerate(all_terms_defs[:count]):
                 clean_h = re.sub(r"^\d+[\.\)]\s*", "", heading)
+                clue = (
+                    f"Identify the landmark case where the Supreme Court held: \"{definition}\""
+                    if heading == "Jurisprudence"
+                    else f"Identify the legal concept or doctrine described: \"{definition}\""
+                )
                 questions.append({
                     "id": f"q{i + 1}",
                     "type": "identification",
-                    "question": f"Identify the concept or term described: \"{definition}\"",
+                    "question": clue,
                     "correct_answer": term,
-                    "explanation": f"{term} is defined in '{clean_h}' as: {definition}"
+                    "explanation": f"{term} is recognized in '{clean_h}' as: {definition}"
                 })
             return questions[:count]
 
@@ -708,7 +1068,6 @@ If the student asks to change or add notes, you may include a [NOTE_UPDATE] JSON
         elif quiz_type == "matching":
             pairs = []
             for term, definition, _ in all_terms_defs[:5]:
-                # Keep matching definitions concise (under 80 chars) for clean UI layout
                 concise_def = definition if len(definition) <= 90 else definition[:87] + "..."
                 pairs.append({
                     "left": term,
@@ -716,13 +1075,13 @@ If the student asks to change or add notes, you may include a [NOTE_UPDATE] JSON
                 })
 
             if len(pairs) < 2:
-                pairs.append({"left": "Core Concept", "right": notes.get("summary", "Primary study summary.")[:80]})
+                pairs.append({"left": "Core Principle", "right": notes.get("summary", "Primary study summary.")[:80]})
 
             return [
                 {
                     "id": "q1",
                     "type": "matching",
-                    "question": "Match each concept from the study notes with its corresponding definition or role:",
+                    "question": "Match each case or legal concept with its corresponding ruling or definition:",
                     "matching_pairs": pairs,
                     "correct_answer": "All pairs matched",
                     "explanation": f"Successfully connected all {len(pairs)} concepts directly extracted from your study notes."
@@ -733,14 +1092,46 @@ If the student asks to change or add notes, you may include a [NOTE_UPDATE] JSON
 
     def _generate_fallback_chat_reply(self, message: str, notes: Dict[str, Any]) -> str:
         """
-        Generates context-aware chat replies grounded directly in the user's notes and document.
+        Generates context-aware chat replies grounded directly in the user's notes,
+        jurisprudence case digests, and legal doctrines.
         """
         msg_lower = message.lower()
         title = notes.get("title", "Study Material")
         summary = notes.get("summary", "")
         sections = notes.get("sections", [])
+        cases = notes.get("cases", [])
+        doctrines = notes.get("doctrines", [])
 
-        # Check if user is asking about a specific term in their notes
+        # 1. Check if user asks about a specific case
+        for c in cases:
+            c_name = c.get("case_name", "")
+            if c_name and (c_name.lower() in msg_lower or any(part.lower() in msg_lower for part in c_name.split() if len(part) > 4)):
+                citation = f" ({c.get('citation')})" if c.get("citation") else ""
+                ponente = f" • Ponente: {c.get('ponente')}" if c.get("ponente") else ""
+                return (
+                    f"### Case Digest: **{c_name}**{citation}\n\n"
+                    f"**Court:** Supreme Court{ponente}\n\n"
+                    f"**Facts:**\n{c.get('facts') or 'Refer to case text in your notes.'}\n\n"
+                    f"**Issue:**\n{c.get('issue') or 'Legal issue presented for adjudication.'}\n\n"
+                    f"**Ruling / Ratio Decidendi:**\n{c.get('ruling') or 'Holding of the Court.'}\n\n"
+                    f"**Doctrine Applied:**\n> {c.get('doctrine_applied') or 'Key precedent applied.'}"
+                )
+
+        # 2. Check if user asks about a specific doctrine
+        for d in doctrines:
+            d_name = d.get("name", "")
+            if d_name and d_name.lower() in msg_lower:
+                elements_str = "\n".join([f"{i + 1}. {e}" for i, e in enumerate(d.get("elements", []))]) or "See full reviewer."
+                exceptions_str = "\n".join([f"• {ex}" for ex in d.get("exceptions", [])]) or "None noted."
+                basis = f"\n\n**Statutory Basis:** {d.get('statutory_basis')}" if d.get("statutory_basis") else ""
+                return (
+                    f"### Legal Doctrine: **{d_name}**{basis}\n\n"
+                    f"**Statement / Rule of Law:**\n> {d.get('statement')}\n\n"
+                    f"**Requisites / Elements:**\n{elements_str}\n\n"
+                    f"**Exceptions / Limitations:**\n{exceptions_str}"
+                )
+
+        # 3. Check if user is asking about a specific term in their notes
         for s in sections:
             for kt in s.get("key_terms", []):
                 term = kt.get("term", "")
@@ -755,13 +1146,20 @@ If the student asks to change or add notes, you may include a [NOTE_UPDATE] JSON
                     )
 
         if "summary" in msg_lower or "explain" in msg_lower or "overview" in msg_lower:
-            section_list = "\n".join([f"- **{s.get('heading')}**: {len(s.get('subpoints', []))} key points, {len(s.get('key_terms', []))} terms" for s in sections[:4]])
+            parts = []
+            if cases:
+                parts.append(f"**Jurisprudence Cases ({len(cases)}):** " + ", ".join([c.get("case_name", "") for c in cases[:4]]))
+            if doctrines:
+                parts.append(f"**Legal Doctrines ({len(doctrines)}):** " + ", ".join([d.get("name", "") for d in doctrines[:4]]))
+            section_list = "\n".join([f"- **{s.get('heading')}**: {len(s.get('subpoints', []))} key points" for s in sections[:4]])
+            parts_str = "\n\n".join(parts) + "\n\n" if parts else ""
             return (
                 f"### Summary: {title}\n\n"
                 f"{summary}\n\n"
-                f"**Main Sections Covered:**\n"
+                f"{parts_str}"
+                f"**Main Sections:**\n"
                 f"{section_list}\n\n"
-                f"Ask me about any specific section or term to dive deeper!"
+                f"Ask me about any specific case, doctrine, or section to dive deeper using the IRAC method!"
             )
 
         if "quiz" in msg_lower or "test" in msg_lower:
@@ -773,12 +1171,12 @@ If the student asks to change or add notes, you may include a [NOTE_UPDATE] JSON
         if "flashcard" in msg_lower or "card" in msg_lower:
             return (
                 f"You have active recall flashcards available in the **Flashcards** tab! "
-                f"They test the key definitions and core takeaways extracted from **{title}**."
+                f"They test the key definitions, case rulings, and doctrine elements extracted from **{title}**."
             )
 
         return (
             f"I'm your AI tutor for **{title}**! "
-            f"I can help explain any concept from your notes, formulate custom review questions, break down complex definitions, or summarize specific sections. "
+            f"I can help explain any case brief, break down legal doctrines and their requisites, formulate IRAC practice questions, or synthesize specific sections. "
             f"What would you like to explore?"
         )
 

@@ -5,6 +5,18 @@ All notable changes to Aral.ai are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] — 2026-09-07
+
+### Added
+- Law school & jurisprudence note extractor:
+  - Automatic classification of legal material (court jurisprudence, case digests, statutes, codal outlines).
+  - Case identification with FIRAC digest extraction: Case Name, Citation / G.R. No., Ponente, Date, Facts, Issue, Ruling / Ratio Decidendi, and Doctrine Applied.
+  - Legal doctrine extraction: Statement of rule of law, numbered Requisites / Elements, recognized Exceptions, statutory basis, and landmark supporting cases.
+  - Dynamic heuristic fallback parsing for offline/local extraction of case briefs and doctrines from raw legal texts.
+  - Dedicated Law Reviewer UI in `NotesReviewEditor`: Case brief cards, 1-click Copy Digest to clipboard, numbered Requisites checklist, and law school sub-tabs.
+  - Law-specific flashcards testing case holdings and doctrine elements, bar-style scenario quizzes, and IRAC-guided AI tutor chat.
+  - Automated test suite in `tests/test_law_notes.py` validating legal detection, heuristic extraction, flashcards/quiz generation, and API review roundtrip.
+
 ## [1.0.1] — 2026-09-05
 
 ### Added

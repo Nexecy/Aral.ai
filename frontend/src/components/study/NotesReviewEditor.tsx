@@ -15,9 +15,18 @@ import {
   Layers,
   ArrowRight,
   HelpCircle,
-  RotateCw
+  RotateCw,
+  Scale,
+  Gavel,
+  FileText,
+  Copy,
+  ShieldAlert,
+  ListOrdered,
+  Bookmark,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
-import { Notes, NoteContent, NoteSection, KeyTerm } from '@/lib/types';
+import { Notes, NoteContent, NoteSection, KeyTerm, LegalCase, LegalDoctrine } from '@/lib/types';
 import { api } from '@/lib/api';
 
 interface NotesReviewEditorProps {
@@ -35,31 +44,191 @@ export function NotesReviewEditor({
   onConfirmReview,
   onRegenerateNotes
 }: NotesReviewEditorProps) {
-  const [content, setContent] = useState<NoteContent>(
-    initialNotes?.content || {
-      title: 'Extracted Study Notes',
-      summary: '',
-      sections: []
-    }
-  );
+  const [content, setContent] = useState<NoteContent>(() => {
+    const initial = initialNotes?.content;
+    return {
+      title: initial?.title || 'Extracted Study Notes',
+      summary: initial?.summary || '',
+      document_type: initial?.document_type || 'general',
+      sections: initial?.sections || [],
+      cases: initial?.cases || [],
+      doctrines: initial?.doctrines || []
+    };
+  });
   
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
   const [isReviewed, setIsReviewed] = useState<boolean>(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'all' | 'cases' | 'doctrines' | 'sections'>('all');
+  const [copiedCaseId, setCopiedCaseId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (initialNotes?.content) setContent(initialNotes.content);
+    if (initialNotes?.content) {
+      setContent({
+        title: initialNotes.content.title || 'Extracted Study Notes',
+        summary: initialNotes.content.summary || '',
+        document_type: initialNotes.content.document_type || 'general',
+        sections: initialNotes.content.sections || [],
+        cases: initialNotes.content.cases || [],
+        doctrines: initialNotes.content.doctrines || []
+      });
+    }
   }, [initialNotes]);
 
-  // Update Section Title
+  const hasCases = Boolean(content.cases && content.cases.length > 0);
+  const hasDoctrines = Boolean(content.doctrines && content.doctrines.length > 0);
+  const isLawReviewer = content.document_type === 'law' || hasCases || hasDoctrines;
+
+  // ── Clipboard Copy for Case Digest ─────────────────────────────────────────
+  const handleCopyCaseDigest = (c: LegalCase, idx: number) => {
+    const parts = [
+      `CASE: ${c.case_name}`,
+      c.citation ? `CITATION: ${c.citation}` : null,
+      c.ponente ? `PONENTE: ${c.ponente}` : null,
+      c.date ? `DATE: ${c.date}` : null,
+      '',
+      'FACTS:',
+      c.facts || '(No facts summarized)',
+      '',
+      'ISSUE:',
+      c.issue || '(No issue specified)',
+      '',
+      'RULING / RATIO DECIDENDI:',
+      c.ruling || '(No ruling specified)',
+      c.doctrine_applied ? `\nDOCTRINE APPLIED: ${c.doctrine_applied}` : null
+    ].filter((p): p is string => p !== null).join('\n');
+
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(parts);
+      const id = c.id || `case-${idx}`;
+      setCopiedCaseId(id);
+      setTimeout(() => setCopiedCaseId(null), 2500);
+    }
+  };
+
+  // ── Case Handlers ──────────────────────────────────────────────────────────
+  const handleCaseChange = (idx: number, field: keyof LegalCase, val: string) => {
+    const updated = { ...content };
+    if (!updated.cases) updated.cases = [];
+    updated.cases[idx] = { ...updated.cases[idx], [field]: val };
+    setContent(updated);
+  };
+
+  const addCase = () => {
+    const updated = { ...content };
+    if (!updated.cases) updated.cases = [];
+    updated.cases.push({
+      id: `case-${Date.now()}`,
+      case_name: 'New Case Title (e.g. People v. Cruz)',
+      citation: 'G.R. No. 000000',
+      ponente: 'Supreme Court Justice',
+      facts: 'Essential facts of the case...',
+      issue: 'Whether or not...',
+      ruling: 'The Supreme Court ruled that...',
+      doctrine_applied: 'Applied legal doctrine / precedent'
+    });
+    updated.document_type = 'law';
+    setContent(updated);
+  };
+
+  const removeCase = (idx: number) => {
+    const updated = { ...content };
+    if (updated.cases) {
+      updated.cases.splice(idx, 1);
+      setContent(updated);
+    }
+  };
+
+  // ── Doctrine Handlers ──────────────────────────────────────────────────────
+  const handleDoctrineChange = (idx: number, field: keyof LegalDoctrine, val: any) => {
+    const updated = { ...content };
+    if (!updated.doctrines) updated.doctrines = [];
+    updated.doctrines[idx] = { ...updated.doctrines[idx], [field]: val };
+    setContent(updated);
+  };
+
+  const addDoctrine = () => {
+    const updated = { ...content };
+    if (!updated.doctrines) updated.doctrines = [];
+    updated.doctrines.push({
+      id: `doc-${Date.now()}`,
+      name: 'New Legal Doctrine',
+      statement: 'Authoritative rule of law or doctrine definition...',
+      elements: ['Requisite 1: Essential condition', 'Requisite 2: Action or conduct'],
+      exceptions: ['Exception: Under extraordinary circumstances'],
+      statutory_basis: 'Constitutional / Statutory provision',
+      supporting_cases: []
+    });
+    updated.document_type = 'law';
+    setContent(updated);
+  };
+
+  const removeDoctrine = (idx: number) => {
+    const updated = { ...content };
+    if (updated.doctrines) {
+      updated.doctrines.splice(idx, 1);
+      setContent(updated);
+    }
+  };
+
+  const handleDoctrineElementChange = (dIdx: number, eIdx: number, val: string) => {
+    const updated = { ...content };
+    if (updated.doctrines && updated.doctrines[dIdx]?.elements) {
+      updated.doctrines[dIdx].elements![eIdx] = val;
+      setContent(updated);
+    }
+  };
+
+  const addDoctrineElement = (dIdx: number) => {
+    const updated = { ...content };
+    if (updated.doctrines) {
+      if (!updated.doctrines[dIdx].elements) updated.doctrines[dIdx].elements = [];
+      updated.doctrines[dIdx].elements!.push('New requisite or element...');
+      setContent(updated);
+    }
+  };
+
+  const removeDoctrineElement = (dIdx: number, eIdx: number) => {
+    const updated = { ...content };
+    if (updated.doctrines && updated.doctrines[dIdx]?.elements) {
+      updated.doctrines[dIdx].elements!.splice(eIdx, 1);
+      setContent(updated);
+    }
+  };
+
+  const handleDoctrineExceptionChange = (dIdx: number, exIdx: number, val: string) => {
+    const updated = { ...content };
+    if (updated.doctrines && updated.doctrines[dIdx]?.exceptions) {
+      updated.doctrines[dIdx].exceptions![exIdx] = val;
+      setContent(updated);
+    }
+  };
+
+  const addDoctrineException = (dIdx: number) => {
+    const updated = { ...content };
+    if (updated.doctrines) {
+      if (!updated.doctrines[dIdx].exceptions) updated.doctrines[dIdx].exceptions = [];
+      updated.doctrines[dIdx].exceptions!.push('New recognized exception...');
+      setContent(updated);
+    }
+  };
+
+  const removeDoctrineException = (dIdx: number, exIdx: number) => {
+    const updated = { ...content };
+    if (updated.doctrines && updated.doctrines[dIdx]?.exceptions) {
+      updated.doctrines[dIdx].exceptions!.splice(exIdx, 1);
+      setContent(updated);
+    }
+  };
+
+  // ── Section Handlers ───────────────────────────────────────────────────────
   const handleSectionHeadingChange = (index: number, newHeading: string) => {
     const updated = { ...content };
     updated.sections[index].heading = newHeading;
     setContent(updated);
   };
 
-  // Subpoints handlers
   const handleSubpointChange = (sIdx: number, pIdx: number, text: string) => {
     const updated = { ...content };
     updated.sections[sIdx].subpoints[pIdx] = text;
@@ -78,7 +247,6 @@ export function NotesReviewEditor({
     setContent(updated);
   };
 
-  // Key Terms handlers
   const handleKeyTermChange = (sIdx: number, tIdx: number, field: 'term' | 'definition', val: string) => {
     const updated = { ...content };
     updated.sections[sIdx].key_terms[tIdx][field] = val;
@@ -88,7 +256,7 @@ export function NotesReviewEditor({
   const addKeyTerm = (sIdx: number) => {
     const updated = { ...content };
     if (!updated.sections[sIdx].key_terms) updated.sections[sIdx].key_terms = [];
-    updated.sections[sIdx].key_terms.push({ term: 'New Term', definition: 'Definition' });
+    updated.sections[sIdx].key_terms.push({ term: 'New Term / Maxim', definition: 'Precise definition' });
     setContent(updated);
   };
 
@@ -98,13 +266,12 @@ export function NotesReviewEditor({
     setContent(updated);
   };
 
-  // Add Section
   const addSection = () => {
     const updated = { ...content };
     updated.sections.push({
-      heading: `Section ${updated.sections.length + 1}: Key Topic`,
-      subpoints: ['Core concept detail'],
-      key_terms: [{ term: 'Key Concept', definition: 'Explanation' }]
+      heading: `Section ${updated.sections.length + 1}: Key Legal Topic`,
+      subpoints: ['Core legal rule or statutory provision'],
+      key_terms: [{ term: 'Legal Concept', definition: 'Explanation' }]
     });
     setContent(updated);
   };
@@ -115,12 +282,12 @@ export function NotesReviewEditor({
     setContent(updated);
   };
 
-  // Save changes to backend
+  // ── Save changes to backend ────────────────────────────────────────────────
   const handleSave = async () => {
     setSaving(true);
     setSaveMessage(null);
     try {
-      const updated = await api.updateNotes(sessionId, content, 'reviewed edit');
+      await api.updateNotes(sessionId, content, 'reviewed edit');
       setIsEditing(false);
       setSaveMessage('Changes saved successfully.');
       setTimeout(() => setSaveMessage(null), 3000);
@@ -131,7 +298,7 @@ export function NotesReviewEditor({
     }
   };
 
-  // Confirm and Unlock Flashcards & Quizzes
+  // ── Confirm and Unlock Flashcards & Quizzes ────────────────────────────────
   const handleConfirmAndProceed = async () => {
     setSaving(true);
     try {
@@ -147,18 +314,30 @@ export function NotesReviewEditor({
 
   return (
     <div className="space-y-6">
-      {generating && content.sections.length === 0 && (
+      {generating && content.sections.length === 0 && (!content.cases || content.cases.length === 0) && (
         <div className="p-10 rounded-2xl bg-card border border-border flex flex-col items-center justify-center gap-3">
           <Loader2 className="w-8 h-8 text-primary animate-spin" />
-          <p className="text-sm font-semibold text-foreground">Generating structured notes…</p>
-          <p className="text-xs text-muted-foreground">You can keep reading the document while Gemini works.</p>
+          <p className="text-sm font-semibold text-foreground">Generating structured notes & case digests…</p>
+          <p className="text-xs text-muted-foreground">Extracting jurisprudence, doctrines, and core principles.</p>
         </div>
       )}
-      {/* Top Clean Action Bar */}
-      <div className="flex items-center justify-between gap-3 px-1">
+
+      {/* Top Action Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 px-1">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <BookOpen className="w-4 h-4 text-primary" />
-          <span className="font-semibold text-foreground">AI Study Notes & Concepts</span>
+          {isLawReviewer ? (
+            <Scale className="w-4 h-4 text-primary" />
+          ) : (
+            <BookOpen className="w-4 h-4 text-primary" />
+          )}
+          <span className="font-semibold text-foreground">
+            {isLawReviewer ? 'Law Reviewer: Jurisprudence & Doctrines' : 'AI Study Notes & Concepts'}
+          </span>
+          {isLawReviewer && (
+            <span className="px-2 py-0.5 rounded-md bg-primary/10 text-primary text-[11px] font-bold uppercase tracking-wider">
+              Law School
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -201,9 +380,68 @@ export function NotesReviewEditor({
           )}
         </div>
       </div>
+
+      {/* Law School Sub-Navigation Tabs */}
+      {isLawReviewer && (
+        <div className="flex items-center gap-1.5 border-b border-border pb-2 overflow-x-auto text-xs font-medium">
+          <button
+            onClick={() => setActiveTab('all')}
+            className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
+              activeTab === 'all'
+                ? 'bg-primary text-primary-foreground font-bold shadow-sm'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>All Review Material</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('cases')}
+            className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
+              activeTab === 'cases'
+                ? 'bg-primary text-primary-foreground font-bold shadow-sm'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+            }`}
+          >
+            <Scale className="w-3.5 h-3.5" />
+            <span>Jurisprudence & Case Briefs</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-primary-foreground/20 text-primary-foreground">
+              {content.cases?.length || 0}
+            </span>
+          </button>
+          <button
+            onClick={() => setActiveTab('doctrines')}
+            className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
+              activeTab === 'doctrines'
+                ? 'bg-primary text-primary-foreground font-bold shadow-sm'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+            }`}
+          >
+            <Gavel className="w-3.5 h-3.5" />
+            <span>Legal Doctrines & Requisites</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-primary-foreground/20 text-primary-foreground">
+              {content.doctrines?.length || 0}
+            </span>
+          </button>
+          <button
+            onClick={() => setActiveTab('sections')}
+            className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
+              activeTab === 'sections'
+                ? 'bg-primary text-primary-foreground font-bold shadow-sm'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+            }`}
+          >
+            <BookOpen className="w-3.5 h-3.5" />
+            <span>Codal & Concept Outlines</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-primary-foreground/20 text-primary-foreground">
+              {content.sections?.length || 0}
+            </span>
+          </button>
+        </div>
+      )}
       
       {/* Main Notes Sheet */}
-      <div className="bg-card border border-border rounded-2xl p-6 sm:p-8 md:p-10 shadow-notion-soft space-y-8">
+      <div className="bg-card border border-border rounded-2xl p-6 sm:p-8 md:p-10 shadow-notion-soft space-y-10">
         {/* Title & Summary */}
         <div className="space-y-3 pb-6 border-b border-border">
           {isEditing ? (
@@ -225,160 +463,644 @@ export function NotesReviewEditor({
               onChange={(e) => setContent({ ...content, summary: e.target.value })}
               rows={2}
               className="w-full text-sm sm:text-[15px] text-foreground bg-muted/40 p-3 rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary resize-none leading-relaxed"
-              placeholder="Executive summary of key concepts..."
+              placeholder="Executive summary of legal concepts, doctrines, and holdings..."
             />
           ) : (
             <div className="p-4 sm:p-5 rounded-xl bg-surface-container-low border border-border">
               <div className="text-[11px] font-bold uppercase tracking-wider text-primary mb-1.5 flex items-center gap-1.5">
                 <Sparkles className="w-3 h-3" />
-                <span>Executive Summary</span>
+                <span>Executive Summary & Overview</span>
               </div>
               <p className="text-sm sm:text-[15px] text-foreground/90 leading-relaxed font-normal">
-                {content.summary || 'Comprehensive structured notes extracted from study material.'}
+                {content.summary || 'Comprehensive structured review material extracted from your study text.'}
               </p>
             </div>
           )}
         </div>
 
-        {/* Sections */}
-        <div className="space-y-8">
-          {content.sections.map((section, sIdx) => (
-            <div key={sIdx} className="space-y-4 group">
-              {/* Section Header */}
-              <div className="flex items-center justify-between gap-3">
-                {isEditing ? (
-                  <div className="flex items-center gap-2 flex-1">
-                    <span className="text-xs font-mono font-bold text-primary">#{sIdx + 1}</span>
-                    <input
-                      type="text"
-                      value={section.heading}
-                      onChange={(e) => handleSectionHeadingChange(sIdx, e.target.value)}
-                      className="flex-1 font-bold text-lg sm:text-xl text-foreground bg-muted/40 px-3 py-1.5 rounded-lg border border-border"
-                    />
-                    <button
-                      onClick={() => removeSection(sIdx)}
-                      className="p-1.5 text-destructive hover:bg-destructive/10 rounded-lg"
-                      title="Delete section"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ) : (
-                  <h3 className="text-lg sm:text-xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
-                    <span className="w-2 h-2 rounded-full bg-primary shrink-0" />
-                    <span>{section.heading}</span>
-                  </h3>
-                )}
+        {/* ── PART 1: JURISPRUDENCE & CASE BRIEFS (FIRAC) ──────────────────────── */}
+        {(activeTab === 'all' || activeTab === 'cases') && (hasCases || isEditing) && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between gap-3 pb-2 border-b border-border/80">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                  <Scale className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-lg sm:text-xl font-extrabold text-foreground">
+                    Jurisprudence & Case Briefs
+                  </h2>
+                  <p className="text-xs text-muted-foreground">
+                    Supreme Court decisions analyzed via Facts, Issue, Ruling (FIR), and Doctrine Applied.
+                  </p>
+                </div>
               </div>
 
-              {/* Bullet Subpoints */}
-              <div className="pl-5 sm:pl-6 space-y-2.5 border-l-2 border-primary/25">
-                {section.subpoints.map((subpoint, pIdx) => (
-                  <div key={pIdx} className="flex items-start gap-2.5 text-sm sm:text-[15px] text-foreground/90 leading-relaxed">
-                    <span className="text-primary font-bold text-base select-none leading-none mt-1">•</span>
-                    {isEditing ? (
-                      <div className="flex items-center gap-2 flex-1">
-                        <input
-                          type="text"
-                          value={subpoint}
-                          onChange={(e) => handleSubpointChange(sIdx, pIdx, e.target.value)}
-                          className="flex-1 bg-muted/40 px-2.5 py-1 rounded-lg border border-border text-sm"
-                        />
-                        <button
-                          onClick={() => removeSubpoint(sIdx, pIdx)}
-                          className="text-muted-foreground hover:text-destructive p-1"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ) : (
-                      <span className="flex-1">{subpoint}</span>
-                    )}
-                  </div>
-                ))}
+              {isEditing && (
+                <button
+                  onClick={addCase}
+                  className="px-3 py-1.5 rounded-lg border border-primary/30 text-primary text-xs font-bold flex items-center gap-1.5 hover:bg-primary/5 transition-all"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Case Brief</span>
+                </button>
+              )}
+            </div>
 
+            {content.cases && content.cases.length > 0 ? (
+              <div className="space-y-6">
+                {content.cases.map((c, cIdx) => {
+                  const caseId = c.id || `case-${cIdx}`;
+                  const isCopied = copiedCaseId === caseId;
+
+                  return (
+                    <div
+                      key={caseId}
+                      className="rounded-2xl bg-surface-container-low border border-border/90 p-5 sm:p-6 space-y-4 shadow-sm hover:border-primary/40 transition-colors"
+                    >
+                      {/* Case Header */}
+                      <div className="flex flex-wrap items-start justify-between gap-3 pb-3 border-b border-border/60">
+                        <div className="space-y-1 flex-1 min-w-[240px]">
+                          {isEditing ? (
+                            <div className="space-y-2">
+                              <input
+                                type="text"
+                                value={c.case_name}
+                                onChange={(e) => handleCaseChange(cIdx, 'case_name', e.target.value)}
+                                className="w-full font-bold text-base bg-card px-3 py-1.5 rounded-lg border border-border text-foreground"
+                                placeholder="Case Caption (e.g. Oposa v. Factoran, Jr.)"
+                              />
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <input
+                                  type="text"
+                                  value={c.citation || ''}
+                                  onChange={(e) => handleCaseChange(cIdx, 'citation', e.target.value)}
+                                  className="text-xs bg-card px-2.5 py-1 rounded-md border border-border"
+                                  placeholder="G.R. No. / Citation (e.g. G.R. No. 101083)"
+                                />
+                                <input
+                                  type="text"
+                                  value={c.ponente || ''}
+                                  onChange={(e) => handleCaseChange(cIdx, 'ponente', e.target.value)}
+                                  className="text-xs bg-card px-2.5 py-1 rounded-md border border-border"
+                                  placeholder="Ponente (e.g. Davide, Jr., J.)"
+                                />
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <h3 className="font-extrabold text-base sm:text-lg text-foreground tracking-tight flex items-center gap-2">
+                                <span>{c.case_name}</span>
+                              </h3>
+                              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                {c.citation && (
+                                  <span className="px-2 py-0.5 rounded-md bg-card border border-border font-mono text-[11px] font-semibold text-primary">
+                                    {c.citation}
+                                  </span>
+                                )}
+                                {c.ponente && (
+                                  <span className="flex items-center gap-1 font-medium">
+                                    <span className="text-muted-foreground/60">Ponente:</span>
+                                    <span className="text-foreground">{c.ponente}</span>
+                                  </span>
+                                )}
+                                {c.date && (
+                                  <span className="text-muted-foreground/70">• {c.date}</span>
+                                )}
+                              </div>
+                            </>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleCopyCaseDigest(c, cIdx)}
+                            className="px-2.5 py-1.5 rounded-lg border border-border bg-card text-muted-foreground hover:text-foreground text-xs font-semibold flex items-center gap-1.5 hover:bg-muted transition-all"
+                            title="Copy formatted case digest"
+                          >
+                            {isCopied ? (
+                              <>
+                                <Check className="w-3.5 h-3.5 text-sticker-green" />
+                                <span className="text-sticker-green text-[11px]">Copied Digest!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3.5 h-3.5" />
+                                <span className="text-[11px]">Copy Digest</span>
+                              </>
+                            )}
+                          </button>
+
+                          {isEditing && (
+                            <button
+                              onClick={() => removeCase(cIdx)}
+                              className="p-1.5 text-destructive hover:bg-destructive/10 rounded-lg"
+                              title="Delete case brief"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* FIR Body: Facts, Issue, Ruling */}
+                      <div className="space-y-3.5 text-xs sm:text-[13px] leading-relaxed">
+                        {/* Facts */}
+                        <div className="space-y-1">
+                          <div className="font-bold text-[11px] uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground" />
+                            <span>Facts of the Case</span>
+                          </div>
+                          {isEditing ? (
+                            <textarea
+                              value={c.facts || ''}
+                              onChange={(e) => handleCaseChange(cIdx, 'facts', e.target.value)}
+                              rows={3}
+                              className="w-full p-2.5 rounded-lg bg-card border border-border resize-none"
+                              placeholder="Concise factual antecedents..."
+                            />
+                          ) : (
+                            <p className="text-foreground/90 pl-3 border-l-2 border-border/80">
+                              {c.facts || 'No facts provided.'}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Issue */}
+                        <div className="space-y-1">
+                          <div className="font-bold text-[11px] uppercase tracking-wider text-primary flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                            <span>Legal Issue(s)</span>
+                          </div>
+                          {isEditing ? (
+                            <textarea
+                              value={c.issue || ''}
+                              onChange={(e) => handleCaseChange(cIdx, 'issue', e.target.value)}
+                              rows={2}
+                              className="w-full p-2.5 rounded-lg bg-card border border-border resize-none"
+                              placeholder="Constitutional or legal question..."
+                            />
+                          ) : (
+                            <p className="font-medium text-foreground pl-3 border-l-2 border-primary/50 bg-primary/5 p-2 rounded-r-lg">
+                              {c.issue || 'No issue defined.'}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Ruling */}
+                        <div className="space-y-1">
+                          <div className="font-bold text-[11px] uppercase tracking-wider text-sticker-green flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-sticker-green" />
+                            <span>Ruling & Ratio Decidendi</span>
+                          </div>
+                          {isEditing ? (
+                            <textarea
+                              value={c.ruling || ''}
+                              onChange={(e) => handleCaseChange(cIdx, 'ruling', e.target.value)}
+                              rows={3}
+                              className="w-full p-2.5 rounded-lg bg-card border border-border resize-none"
+                              placeholder="Court holding, legal reasoning, and dispositive portion..."
+                            />
+                          ) : (
+                            <p className="text-foreground/95 pl-3 border-l-2 border-sticker-green/60 font-medium leading-relaxed">
+                              {c.ruling || 'No ruling extracted.'}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Doctrine Applied */}
+                        {(c.doctrine_applied || isEditing) && (
+                          <div className="pt-2 flex flex-wrap items-center gap-2">
+                            <span className="font-bold text-[11px] uppercase tracking-wider text-muted-foreground">
+                              Doctrine:
+                            </span>
+                            {isEditing ? (
+                              <input
+                                type="text"
+                                value={c.doctrine_applied || ''}
+                                onChange={(e) => handleCaseChange(cIdx, 'doctrine_applied', e.target.value)}
+                                className="flex-1 bg-card px-2.5 py-1 rounded-md border border-border text-xs"
+                                placeholder="Legal doctrine applied (e.g. Intergenerational Responsibility)"
+                              />
+                            ) : (
+                              <span className="px-2.5 py-1 rounded-lg bg-primary/10 text-primary font-semibold text-xs border border-primary/20">
+                                {c.doctrine_applied}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="p-6 rounded-xl border border-dashed border-border text-center text-xs text-muted-foreground space-y-2">
+                <p>No legal cases currently extracted.</p>
                 {isEditing && (
                   <button
-                    onClick={() => addSubpoint(sIdx)}
-                    className="text-xs text-primary font-semibold flex items-center gap-1 mt-2 hover:underline"
+                    onClick={addCase}
+                    className="text-primary font-bold hover:underline"
                   >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add bullet point</span>
+                    + Add your first case digest
                   </button>
                 )}
               </div>
+            )}
+          </div>
+        )}
 
-              {/* Key Terms Pill Grid */}
-              {((section.key_terms && section.key_terms.length > 0) || isEditing) && (
-                <div className="mt-3 pl-5 sm:pl-6">
-                  <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2.5 flex items-center gap-1.5">
-                    <Tag className="w-3 h-3 text-primary" />
-                    <span>Key Terms & Definitions</span>
-                  </div>
+        {/* ── PART 2: LEGAL DOCTRINES & REQUISITES ───────────────────────────── */}
+        {(activeTab === 'all' || activeTab === 'doctrines') && (hasDoctrines || isEditing) && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between gap-3 pb-2 border-b border-border/80">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                  <Gavel className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-lg sm:text-xl font-extrabold text-foreground">
+                    Legal Doctrines & Requisites
+                  </h2>
+                  <p className="text-xs text-muted-foreground">
+                    Substantive rules of law, numbered elements/requisites, and recognized exceptions.
+                  </p>
+                </div>
+              </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {section.key_terms?.map((kt, tIdx) => (
-                      <div
-                        key={tIdx}
-                        className="p-3.5 rounded-xl bg-surface-container-low/90 border border-border space-y-1 hover:border-primary/40 transition-colors"
-                      >
+              {isEditing && (
+                <button
+                  onClick={addDoctrine}
+                  className="px-3 py-1.5 rounded-lg border border-primary/30 text-primary text-xs font-bold flex items-center gap-1.5 hover:bg-primary/5 transition-all"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Legal Doctrine</span>
+                </button>
+              )}
+            </div>
+
+            {content.doctrines && content.doctrines.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {content.doctrines.map((d, dIdx) => (
+                  <div
+                    key={d.id || dIdx}
+                    className="rounded-2xl bg-surface-container-low border border-border p-5 space-y-4 shadow-sm hover:border-primary/40 transition-colors flex flex-col justify-between"
+                  >
+                    <div className="space-y-3">
+                      {/* Header */}
+                      <div className="flex items-start justify-between gap-2">
                         {isEditing ? (
-                          <div className="space-y-1.5">
+                          <div className="space-y-1.5 flex-1">
                             <input
                               type="text"
-                              value={kt.term}
-                              onChange={(e) => handleKeyTermChange(sIdx, tIdx, 'term', e.target.value)}
-                              className="w-full font-bold text-xs sm:text-sm bg-card px-2 py-1 rounded-md border border-border text-primary"
-                              placeholder="Term"
+                              value={d.name}
+                              onChange={(e) => handleDoctrineChange(dIdx, 'name', e.target.value)}
+                              className="w-full font-bold text-sm bg-card px-2.5 py-1 rounded-md border border-border text-foreground"
+                              placeholder="Doctrine Name"
                             />
-                            <textarea
-                              value={kt.definition}
-                              onChange={(e) => handleKeyTermChange(sIdx, tIdx, 'definition', e.target.value)}
-                              rows={2}
-                              className="w-full text-xs bg-card px-2 py-1 rounded-md border border-border text-foreground resize-none leading-relaxed"
-                              placeholder="Definition"
+                            <input
+                              type="text"
+                              value={d.statutory_basis || ''}
+                              onChange={(e) => handleDoctrineChange(dIdx, 'statutory_basis', e.target.value)}
+                              className="w-full text-xs bg-card px-2.5 py-1 rounded-md border border-border"
+                              placeholder="Statutory / Codal Basis (e.g. Art. II, Sec. 16)"
                             />
-                            <button
-                              onClick={() => removeKeyTerm(sIdx, tIdx)}
-                              className="text-destructive text-[11px] font-semibold hover:underline"
-                            >
-                              Remove Term
-                            </button>
                           </div>
                         ) : (
-                          <>
-                            <div className="font-bold text-xs sm:text-sm text-primary tracking-wide">{kt.term}</div>
-                            <div className="text-xs sm:text-[13px] text-foreground/80 leading-normal">{kt.definition}</div>
-                          </>
+                          <div>
+                            <h3 className="font-extrabold text-base text-foreground">
+                              {d.name}
+                            </h3>
+                            {d.statutory_basis && (
+                              <p className="text-xs font-mono text-primary font-semibold mt-0.5">
+                                {d.statutory_basis}
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                        {isEditing && (
+                          <button
+                            onClick={() => removeDoctrine(dIdx)}
+                            className="p-1 text-destructive hover:bg-destructive/10 rounded-md"
+                            title="Delete doctrine"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         )}
                       </div>
-                    ))}
+
+                      {/* Statement / Rule of law */}
+                      <div>
+                        {isEditing ? (
+                          <textarea
+                            value={d.statement}
+                            onChange={(e) => handleDoctrineChange(dIdx, 'statement', e.target.value)}
+                            rows={2}
+                            className="w-full text-xs bg-card p-2 rounded-md border border-border resize-none"
+                            placeholder="Statement of the doctrine..."
+                          />
+                        ) : (
+                          <blockquote className="text-xs sm:text-[13px] text-foreground/90 italic border-l-2 border-primary/50 pl-3 leading-relaxed">
+                            "{d.statement}"
+                          </blockquote>
+                        )}
+                      </div>
+
+                      {/* Numbered Elements / Requisites */}
+                      <div className="space-y-2 pt-1">
+                        <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+                          <span className="flex items-center gap-1.5">
+                            <ListOrdered className="w-3 h-3 text-primary" />
+                            <span>Elements / Requisites</span>
+                          </span>
+                          {isEditing && (
+                            <button
+                              onClick={() => addDoctrineElement(dIdx)}
+                              className="text-primary text-[10px] hover:underline flex items-center gap-0.5"
+                            >
+                              <Plus className="w-3 h-3" /> Add element
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="space-y-1.5 pl-1">
+                          {d.elements && d.elements.length > 0 ? (
+                            d.elements.map((elem, eIdx) => (
+                              <div key={eIdx} className="flex items-start gap-2 text-xs text-foreground/90">
+                                <span className="w-4 h-4 rounded-full bg-card border border-border text-[10px] font-bold text-primary flex items-center justify-center shrink-0 mt-0.5">
+                                  {eIdx + 1}
+                                </span>
+                                {isEditing ? (
+                                  <div className="flex items-center gap-1.5 flex-1">
+                                    <input
+                                      type="text"
+                                      value={elem}
+                                      onChange={(e) => handleDoctrineElementChange(dIdx, eIdx, e.target.value)}
+                                      className="flex-1 bg-card px-2 py-0.5 rounded border border-border text-xs"
+                                    />
+                                    <button
+                                      onClick={() => removeDoctrineElement(dIdx, eIdx)}
+                                      className="text-muted-foreground hover:text-destructive p-0.5"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <span className="leading-snug">{elem}</span>
+                                )}
+                              </div>
+                            ))
+                          ) : (
+                            <p className="text-[11px] text-muted-foreground italic">No elements specified.</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Exceptions */}
+                      {(d.exceptions && d.exceptions.length > 0 || isEditing) && (
+                        <div className="space-y-1.5 pt-1">
+                          <div className="text-[11px] font-bold uppercase tracking-wider text-sticker-yellow flex items-center justify-between">
+                            <span className="flex items-center gap-1.5">
+                              <ShieldAlert className="w-3 h-3" />
+                              <span>Exceptions / Limitations</span>
+                            </span>
+                            {isEditing && (
+                              <button
+                                onClick={() => addDoctrineException(dIdx)}
+                                className="text-primary text-[10px] hover:underline flex items-center gap-0.5"
+                              >
+                                <Plus className="w-3 h-3" /> Add exception
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="flex flex-wrap gap-1.5">
+                            {d.exceptions?.map((ex, exIdx) => (
+                              <div
+                                key={exIdx}
+                                className="px-2.5 py-1 rounded-lg bg-surface-container border border-border text-xs text-foreground/90 flex items-center gap-1.5"
+                              >
+                                {isEditing ? (
+                                  <>
+                                    <input
+                                      type="text"
+                                      value={ex}
+                                      onChange={(e) => handleDoctrineExceptionChange(dIdx, exIdx, e.target.value)}
+                                      className="bg-card px-1.5 py-0.5 rounded border border-border text-xs"
+                                    />
+                                    <button
+                                      onClick={() => removeDoctrineException(dIdx, exIdx)}
+                                      className="text-muted-foreground hover:text-destructive"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  </>
+                                ) : (
+                                  <span>{ex}</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-6 rounded-xl border border-dashed border-border text-center text-xs text-muted-foreground space-y-2">
+                <p>No legal doctrines currently cataloged.</p>
+                {isEditing && (
+                  <button
+                    onClick={addDoctrine}
+                    className="text-primary font-bold hover:underline"
+                  >
+                    + Add your first legal doctrine
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── PART 3: OUTLINE, SECTIONS & KEY TERMS ──────────────────────────── */}
+        {(activeTab === 'all' || activeTab === 'sections') && (
+          <div className="space-y-8">
+            <div className="flex items-center justify-between gap-3 pb-2 border-b border-border/80">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                  <BookOpen className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-lg sm:text-xl font-extrabold text-foreground">
+                    {isLawReviewer ? 'Codal & Concept Outlines' : 'Study Notes & Sections'}
+                  </h2>
+                  <p className="text-xs text-muted-foreground">
+                    Structured topic breakdown with key principles and term definitions.
+                  </p>
+                </div>
+              </div>
+
+              {isEditing && (
+                <button
+                  onClick={addSection}
+                  className="px-3 py-1.5 rounded-lg border border-primary/30 text-primary text-xs font-bold flex items-center gap-1.5 hover:bg-primary/5 transition-all"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Section</span>
+                </button>
+              )}
+            </div>
+
+            {content.sections.map((section, sIdx) => (
+              <div key={sIdx} className="space-y-4 group">
+                {/* Section Header */}
+                <div className="flex items-center justify-between gap-3">
+                  {isEditing ? (
+                    <div className="flex items-center gap-2 flex-1">
+                      <span className="text-xs font-mono font-bold text-primary">#{sIdx + 1}</span>
+                      <input
+                        type="text"
+                        value={section.heading}
+                        onChange={(e) => handleSectionHeadingChange(sIdx, e.target.value)}
+                        className="flex-1 font-bold text-lg sm:text-xl text-foreground bg-muted/40 px-3 py-1.5 rounded-lg border border-border"
+                      />
+                      <button
+                        onClick={() => removeSection(sIdx)}
+                        className="p-1.5 text-destructive hover:bg-destructive/10 rounded-lg"
+                        title="Delete section"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <h3 className="text-lg sm:text-xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
+                      <span className="w-2 h-2 rounded-full bg-primary shrink-0" />
+                      <span>{section.heading}</span>
+                    </h3>
+                  )}
+                </div>
+
+                {/* Bullet Subpoints */}
+                <div className="pl-5 sm:pl-6 space-y-2.5 border-l-2 border-primary/25">
+                  {section.subpoints.map((subpoint, pIdx) => (
+                    <div key={pIdx} className="flex items-start gap-2.5 text-sm sm:text-[15px] text-foreground/90 leading-relaxed">
+                      <span className="text-primary font-bold text-base select-none leading-none mt-1">•</span>
+                      {isEditing ? (
+                        <div className="flex items-center gap-2 flex-1">
+                          <input
+                            type="text"
+                            value={subpoint}
+                            onChange={(e) => handleSubpointChange(sIdx, pIdx, e.target.value)}
+                            className="flex-1 bg-muted/40 px-2.5 py-1 rounded-lg border border-border text-sm"
+                          />
+                          <button
+                            onClick={() => removeSubpoint(sIdx, pIdx)}
+                            className="text-muted-foreground hover:text-destructive p-1"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="flex-1">{subpoint}</span>
+                      )}
+                    </div>
+                  ))}
 
                   {isEditing && (
                     <button
-                      onClick={() => addKeyTerm(sIdx)}
+                      onClick={() => addSubpoint(sIdx)}
                       className="text-xs text-primary font-semibold flex items-center gap-1 mt-2 hover:underline"
                     >
                       <Plus className="w-3.5 h-3.5" />
-                      <span>Add key term</span>
+                      <span>Add bullet point</span>
                     </button>
                   )}
                 </div>
-              )}
-            </div>
-          ))}
 
-          {isEditing && (
+                {/* Key Terms Pill Grid */}
+                {((section.key_terms && section.key_terms.length > 0) || isEditing) && (
+                  <div className="mt-3 pl-5 sm:pl-6">
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2.5 flex items-center gap-1.5">
+                      <Tag className="w-3 h-3 text-primary" />
+                      <span>Key Terms & Maxims</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {section.key_terms?.map((kt, tIdx) => (
+                        <div
+                          key={tIdx}
+                          className="p-3.5 rounded-xl bg-surface-container-low/90 border border-border space-y-1 hover:border-primary/40 transition-colors"
+                        >
+                          {isEditing ? (
+                            <div className="space-y-1.5">
+                              <input
+                                type="text"
+                                value={kt.term}
+                                onChange={(e) => handleKeyTermChange(sIdx, tIdx, 'term', e.target.value)}
+                                className="w-full font-bold text-xs sm:text-sm bg-card px-2 py-1 rounded-md border border-border text-primary"
+                                placeholder="Term / Maxim"
+                              />
+                              <textarea
+                                value={kt.definition}
+                                onChange={(e) => handleKeyTermChange(sIdx, tIdx, 'definition', e.target.value)}
+                                rows={2}
+                                className="w-full text-xs bg-card px-2 py-1 rounded-md border border-border text-foreground resize-none leading-relaxed"
+                                placeholder="Definition"
+                              />
+                              <button
+                                onClick={() => removeKeyTerm(sIdx, tIdx)}
+                                className="text-destructive text-[11px] font-semibold hover:underline"
+                              >
+                                Remove Term
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="font-bold text-xs sm:text-sm text-primary tracking-wide">{kt.term}</div>
+                              <div className="text-xs sm:text-[13px] text-foreground/80 leading-normal">{kt.definition}</div>
+                            </>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    {isEditing && (
+                      <button
+                        onClick={() => addKeyTerm(sIdx)}
+                        className="text-xs text-primary font-semibold flex items-center gap-1 mt-2 hover:underline"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add key term</span>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Global Add Law Digest Button if none exist yet */}
+        {!isLawReviewer && isEditing && (
+          <div className="pt-4 flex flex-wrap items-center gap-3 border-t border-border">
             <button
-              onClick={addSection}
-              className="w-full py-3 rounded-xl border-2 border-dashed border-border hover:border-primary/50 text-xs font-bold text-primary flex items-center justify-center gap-1.5 hover:bg-primary/5 transition-all"
+              onClick={addCase}
+              className="px-3.5 py-2 rounded-xl border border-primary/40 text-primary text-xs font-bold flex items-center gap-1.5 hover:bg-primary/5 transition-all"
             >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Add New Section</span>
+              <Scale className="w-3.5 h-3.5" />
+              <span>+ Add Law Case Digest</span>
             </button>
-          )}
-        </div>
+            <button
+              onClick={addDoctrine}
+              className="px-3.5 py-2 rounded-xl border border-primary/40 text-primary text-xs font-bold flex items-center gap-1.5 hover:bg-primary/5 transition-all"
+            >
+              <Gavel className="w-3.5 h-3.5" />
+              <span>+ Add Legal Doctrine</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

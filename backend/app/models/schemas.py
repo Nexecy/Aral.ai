@@ -124,6 +124,26 @@ class KeyTerm(BaseModel):
     term: str
     definition: str
 
+class LegalCase(BaseModel):
+    id: Optional[str] = None
+    case_name: str
+    citation: Optional[str] = ""
+    date: Optional[str] = ""
+    ponente: Optional[str] = ""
+    facts: Optional[str] = ""
+    issue: Optional[str] = ""
+    ruling: Optional[str] = ""
+    doctrine_applied: Optional[str] = ""
+
+class LegalDoctrine(BaseModel):
+    id: Optional[str] = None
+    name: str
+    statement: str
+    elements: List[str] = Field(default_factory=list)
+    exceptions: List[str] = Field(default_factory=list)
+    statutory_basis: Optional[str] = ""
+    supporting_cases: List[str] = Field(default_factory=list)
+
 class NoteSection(BaseModel):
     heading: str
     subpoints: List[str] = Field(default_factory=list)
@@ -132,7 +152,10 @@ class NoteSection(BaseModel):
 class NoteContent(BaseModel):
     title: str = "Extracted Notes"
     summary: str = ""
+    document_type: str = "general" # 'general' | 'law' | 'case_digest'
     sections: List[NoteSection] = Field(default_factory=list)
+    cases: List[LegalCase] = Field(default_factory=list)
+    doctrines: List[LegalDoctrine] = Field(default_factory=list)
 
 class NotesUpdate(BaseModel):
     content: NoteContent

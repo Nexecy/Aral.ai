@@ -7,7 +7,8 @@ import {
   CheckCircle2, 
   ArrowRight,
   Loader2,
-  Sparkles
+  Sparkles,
+  Scale
 } from 'lucide-react';
 import { Notes } from '@/lib/types';
 
@@ -24,8 +25,19 @@ export function CompactNotesCard({
 }: CompactNotesCardProps) {
   const content = notes?.content;
   const sections = content?.sections || [];
+  const cases = content?.cases || [];
+  const doctrines = content?.doctrines || [];
+  const isLaw = content?.document_type === 'law' || cases.length > 0 || doctrines.length > 0;
   const totalKeyTerms = sections.reduce((acc, s) => acc + (s.key_terms?.length || 0), 0);
-  const hasNotes = sections.length > 0 || Boolean(content?.summary);
+  const hasNotes = sections.length > 0 || cases.length > 0 || doctrines.length > 0 || Boolean(content?.summary);
+
+  const statusSubtitle = generating
+    ? 'Gemini is synthesizing your notes…'
+    : hasNotes
+      ? isLaw
+        ? `${cases.length} Case Briefs • ${doctrines.length} Doctrines • ${sections.length} Sections`
+        : `${sections.length} Core Sections • ${totalKeyTerms} Key Definitions`
+      : 'Waiting for notes';
 
   return (
     <div className="bg-surface-container-lowest rounded-3xl p-6 sm:p-7 border border-outline-variant hover:border-outline transition-colors border-t-4 border-t-primary shadow-notebook-subtle flex flex-col justify-between">
@@ -34,20 +46,25 @@ export function CompactNotesCard({
           <div className="w-11 h-11 rounded-xl bg-surface-container text-on-surface flex items-center justify-center border border-outline-variant shrink-0">
             {generating ? (
               <Loader2 className="w-5 h-5 text-primary animate-spin" />
+            ) : isLaw ? (
+              <Scale className="w-5 h-5 text-primary" />
             ) : (
               <BookOpen className="w-5 h-5 text-primary" />
             )}
           </div>
           <div>
-            <h3 className="font-headline-sm text-base sm:text-lg text-on-surface font-bold leading-tight">
-              Reviewer & Notes Extractor
-            </h3>
+            <div className="flex items-center gap-2">
+              <h3 className="font-headline-sm text-base sm:text-lg text-on-surface font-bold leading-tight">
+                {isLaw ? 'Law School Reviewer' : 'Reviewer & Notes Extractor'}
+              </h3>
+              {isLaw && (
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-primary/10 text-primary uppercase">
+                  Law
+                </span>
+              )}
+            </div>
             <p className="text-xs text-on-surface-variant font-medium mt-0.5">
-              {generating
-                ? 'Gemini is synthesizing your notes…'
-                : hasNotes
-                  ? `${sections.length} Core Sections • ${totalKeyTerms} Key Definitions`
-                  : 'Waiting for notes'}
+              {statusSubtitle}
             </p>
           </div>
         </div>
@@ -78,23 +95,41 @@ export function CompactNotesCard({
 
       <div className="mb-6">
         <h4 className="text-[10px] font-mono uppercase text-on-surface-variant tracking-wider mb-2.5 font-bold">
-          Key Topics & Terms
+          {isLaw ? 'Cases, Doctrines & Topics' : 'Key Topics & Terms'}
         </h4>
         <div className="flex flex-wrap gap-2">
           {hasNotes ? (
             <>
-              {sections.slice(0, 2).map((s, idx) => (
+              {cases.slice(0, 2).map((c, idx) => (
                 <span
-                  key={idx}
+                  key={`case-${idx}`}
+                  className="px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-semibold border border-primary/20 truncate max-w-[220px] flex items-center gap-1"
+                >
+                  <span>⚖️</span>
+                  <span>{c.case_name}</span>
+                </span>
+              ))}
+              {doctrines.slice(0, 2).map((d, idx) => (
+                <span
+                  key={`doc-${idx}`}
+                  className="px-3 py-1.5 rounded-lg bg-surface-container text-on-surface text-xs font-semibold border border-outline-variant truncate max-w-[200px] flex items-center gap-1"
+                >
+                  <span>📜</span>
+                  <span>{d.name}</span>
+                </span>
+              ))}
+              {sections.slice(0, cases.length > 0 ? 1 : 2).map((s, idx) => (
+                <span
+                  key={`sec-${idx}`}
                   className="px-3 py-1.5 rounded-lg bg-surface-container text-on-surface text-xs font-medium border border-outline-variant/50 truncate max-w-[220px]"
                 >
                   {s.heading.replace(/^\d+\.\s*/, '')}
                 </span>
               ))}
-              {sections.flatMap((s) => s.key_terms || []).slice(0, 3).map((kt, kIdx) => (
+              {sections.flatMap((s) => s.key_terms || []).slice(0, cases.length > 0 ? 2 : 3).map((kt, kIdx) => (
                 <span
-                  key={kIdx}
-                  className="px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-semibold"
+                  key={`term-${kIdx}`}
+                  className="px-3 py-1.5 rounded-lg bg-primary/5 text-primary text-xs font-semibold"
                 >
                   #{kt.term}
                 </span>

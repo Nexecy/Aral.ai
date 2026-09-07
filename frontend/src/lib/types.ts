@@ -58,6 +58,28 @@ export interface KeyTerm {
   definition: string;
 }
 
+export interface LegalCase {
+  id?: string;
+  case_name: string;
+  citation?: string;
+  date?: string;
+  ponente?: string;
+  facts?: string;
+  issue?: string;
+  ruling?: string;
+  doctrine_applied?: string;
+}
+
+export interface LegalDoctrine {
+  id?: string;
+  name: string;
+  statement: string;
+  elements?: string[];
+  exceptions?: string[];
+  statutory_basis?: string;
+  supporting_cases?: string[];
+}
+
 export interface NoteSection {
   heading: string;
   subpoints: string[];
@@ -67,7 +89,10 @@ export interface NoteSection {
 export interface NoteContent {
   title: string;
   summary: string;
+  document_type?: 'general' | 'law' | 'case_digest';
   sections: NoteSection[];
+  cases?: LegalCase[];
+  doctrines?: LegalDoctrine[];
 }
 
 export interface Notes {
