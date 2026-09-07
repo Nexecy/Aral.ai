@@ -29,7 +29,9 @@ const AUTH_LAYOUT_PATHS = [
   '/privacy',
   '/privacy/',
   '/terms',
-  '/terms/'
+  '/terms/',
+  '/pricing',
+  '/pricing/'
 ];
 
 const GUEST_ONLY_PATHS = [
