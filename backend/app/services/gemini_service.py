@@ -66,10 +66,12 @@ def _extract_retry_delay_seconds(e: BaseException) -> Optional[float]:
 class GeminiService:
     # Priority order of candidate models for fast and resilient generation
     CANDIDATE_MODELS = [
-        "gemini-3.5-flash",
-        "gemini-flash-latest",
+        "gemini-flash-lite-latest",
+        "gemini-3.1-flash-lite-preview",
         "gemini-3.1-flash-lite",
-        "gemini-3.7-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-3-flash-preview",
+        "gemini-flash-latest",
     ]
 
     def __init__(self):
@@ -95,6 +97,38 @@ class GeminiService:
             if m not in models:
                 models.append(m)
         return models
+
+    @staticmethod
+    def _safe_response_text(response: Any) -> str:
+        """
+        Safely extracts text from Gemini response without crashing on response.text property.
+        Handles candidate content parts, thought parts, and quick accessor errors.
+        """
+        if not response:
+            return ""
+
+        # 1. Check candidate parts directly (bypasses SDK property accessor bug)
+        try:
+            if hasattr(response, "candidates") and response.candidates:
+                candidate = response.candidates[0]
+                if hasattr(candidate, "content") and hasattr(candidate.content, "parts"):
+                    parts_text = [
+                        p.text for p in candidate.content.parts
+                        if hasattr(p, "text") and p.text
+                    ]
+                    if parts_text:
+                        return "".join(parts_text)
+        except Exception:
+            pass
+
+        # 2. Try standard property accessor
+        try:
+            if hasattr(response, "text") and response.text:
+                return str(response.text)
+        except Exception:
+            pass
+
+        return ""
 
     @staticmethod
     def _parse_json_safely(raw_text: str) -> Optional[Any]:
@@ -240,10 +274,11 @@ class GeminiService:
                 response = await asyncio.to_thread(
                     model.generate_content,
                     prompt,
-                    request_options={"timeout": 6}
+                    request_options={"timeout": 30}
                 )
-                if response and response.text:
-                    parsed = self._parse_json_safely(response.text)
+                text_content = self._safe_response_text(response)
+                if text_content:
+                    parsed = self._parse_json_safely(text_content)
                     if parsed is not None:
                         return parsed
             except Exception as e:
@@ -268,7 +303,9 @@ class GeminiService:
                 return model.generate_content([prompt, image_part], request_options={"timeout": 25})
             except Exception as e:
                 last_error = e
-                if not _is_transient_rate_limit(e) or attempt == max_attempts:
+                msg_lower = str(e).lower()
+                is_hard_quota = "perday" in msg_lower or "daily" in msg_lower or "quota_id" in msg_lower
+                if not _is_transient_rate_limit(e) or attempt == max_attempts or is_hard_quota:
                     raise e
 
                 suggested_delay = _extract_retry_delay_seconds(e)
@@ -314,8 +351,9 @@ class GeminiService:
             try:
                 model = genai.GenerativeModel(model_name=model_name)
                 response = self._call_vision_model_with_retry(model, prompt, image_part)
-                if response and response.text:
-                    cleaned = response.text.strip()
+                text_content = self._safe_response_text(response)
+                if text_content:
+                    cleaned = text_content.strip()
                     if cleaned:
                         return cleaned
             except Exception as e:
@@ -649,11 +687,12 @@ If the student asks to change or add notes, you may include a [NOTE_UPDATE] JSON
                         chat.send_message,
                         f"{system_context}\n\nStudent Question: {user_message}",
                         stream=True,
-                        request_options={"timeout": 6}
+                        request_options={"timeout": 25}
                     )
                     for chunk in response:
-                        if chunk.text:
-                            yield chunk.text
+                        chunk_text = self._safe_response_text(chunk)
+                        if chunk_text:
+                            yield chunk_text
                             await asyncio.sleep(0)
                     return
                 except Exception as e:

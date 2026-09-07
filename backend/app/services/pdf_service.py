@@ -204,6 +204,7 @@ class PDFService:
 
             page_count = len(doc)
             page_results: Dict[int, Dict[str, Any]] = {}
+            raw_page_texts: Dict[int, str] = {}
             pages_needing_ocr: List[int] = []
 
             # =========================================================================
@@ -216,6 +217,7 @@ class PDFService:
                 try:
                     raw_text = page.get_text("text")
                     cleaned_text = re.sub(r"\n{3,}", "\n\n", raw_text).strip()
+                    raw_page_texts[page_num] = cleaned_text
                     needs_ocr, reason = PDFService._is_poor_or_unmapped_text(cleaned_text, page)
 
                     if len(cleaned_text) > 50 and not needs_ocr:
@@ -318,8 +320,8 @@ class PDFService:
                             finally:
                                 del page
 
-                        page_text = ""
-                        source_type = "ocr_unavailable"
+                        page_text = raw_page_texts.get(page_num, "")
+                        source_type = "unmapped_fallback" if page_text else "ocr_unavailable"
 
                         if img_bytes:
                             try:
