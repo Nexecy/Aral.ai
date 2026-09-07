@@ -473,9 +473,10 @@ def test_documents_are_scoped_to_the_authenticated_user(session_id):
 def _foreign_token() -> str:
     """A JWT for a different subject, signed with the configured secret when present."""
     import jwt
+    from app.core.auth import LOCAL_JWT_SECRET
     from app.core.config import settings
 
-    secret = settings.SUPABASE_JWT_SECRET or "irrelevant"
+    secret = settings.SUPABASE_JWT_SECRET or LOCAL_JWT_SECRET
     return jwt.encode(
         {
             "sub": "11111111-1111-1111-1111-111111111111",

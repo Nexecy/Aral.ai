@@ -25,7 +25,7 @@ export function LandingFAQ() {
     {
       question: 'Is Aral.ai free for students?',
       answer:
-        'Yes! We offer a generous free tier for students, researchers, and learners that includes document parsing, automated active recall flashcards, diagnostic mock quizzes, and the Pomodoro focus timer. No credit card is required to sign up.',
+        'Yes — Free includes daily AI caps (notes, flashcards, quizzes, chat, uploads) with no card required. Need more? Student is ₱199/mo for higher limits, or bring your own Gemini API key (BYOK) to bypass platform caps. See /pricing for the full breakdown.',
     },
     {
       question: 'How do active recall flashcards work in Aral.ai?',

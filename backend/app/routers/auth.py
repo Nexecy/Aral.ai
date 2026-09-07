@@ -36,9 +36,12 @@ def _me_payload(user: Dict[str, Any], profile: Optional[Dict[str, Any]] = None) 
         "bio": profile.get("bio"),
         "gender": profile.get("gender"),
         "theme": profile.get("theme"),
+        "plan": profile.get("plan") or "free",
+        "has_byok": bool(profile.get("has_byok")),
         "has_supabase": settings.has_supabase_credentials,
         "has_gemini": settings.has_gemini_key,
         "gemini_model": settings.GEMINI_MODEL,
+        "student_price_php": settings.STUDENT_PRICE_PHP,
     }
 
 

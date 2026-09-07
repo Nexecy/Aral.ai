@@ -5,6 +5,15 @@ All notable changes to Aral.ai are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Freemium Free vs Student plans priced in PHP (₱199/mo Student stub)
+- Daily AI usage caps for notes, flashcards, quizzes, chat, and uploads
+- BYOK Gemini key support to bypass platform daily caps
+- Settings → Plan usage meters, `/pricing` page, and `/api/billing/*` endpoints
+- Supabase schema: `profiles.plan`, `byok_gemini_key`, and `usage_daily`
+
 ## [1.0.2] — 2026-09-07
 
 ### Added

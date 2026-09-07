@@ -55,6 +55,7 @@ class DBService:
         self.exams: Dict[str, Dict[str, Any]] = {}
         self.pomodoro_settings: Dict[str, Dict[str, Any]] = {}
         self.profiles: Dict[str, Dict[str, Any]] = {}
+        self.usage_daily: Dict[str, Dict[str, Any]] = {}  # f"{user_id}:{YYYY-MM-DD}" -> counters
 
         self._init_supabase()
 
@@ -1016,9 +1017,14 @@ class DBService:
             "bio": None,
             "gender": None,
             "theme": None,
+            "plan": "free",
+            "plan_updated_at": None,
+            "has_byok": False,
+            "byok_gemini_key": None,
         }
 
     def _row_to_profile(self, user_id: str, row: Dict[str, Any]) -> Dict[str, Any]:
+        byok_key = row.get("byok_gemini_key")
         return {
             "id": user_id,
             "display_name": row.get("display_name"),
@@ -1026,6 +1032,11 @@ class DBService:
             "bio": row.get("bio"),
             "gender": row.get("gender"),
             "theme": row.get("theme"),
+            "plan": (row.get("plan") or "free"),
+            "plan_updated_at": row.get("plan_updated_at"),
+            "has_byok": bool(byok_key),
+            # Kept for server-side BYOK use only; never expose via API responses.
+            "byok_gemini_key": byok_key,
         }
 
     async def get_profile(self, user_id: str) -> Dict[str, Any]:
@@ -1048,10 +1059,20 @@ class DBService:
         current = await self.get_profile(user_id)
         allowed = {
             k: patch[k]
-            for k in ("display_name", "avatar_url", "bio", "gender", "theme")
+            for k in (
+                "display_name",
+                "avatar_url",
+                "bio",
+                "gender",
+                "theme",
+                "plan",
+                "plan_updated_at",
+                "byok_gemini_key",
+            )
             if k in patch
         }
         next_profile = {**current, **allowed, "id": user_id, "updated_at": datetime.utcnow().isoformat()}
+        next_profile["has_byok"] = bool(next_profile.get("byok_gemini_key"))
         if self.supabase:
             payload = {
                 "id": user_id,
@@ -1060,6 +1081,9 @@ class DBService:
                 "bio": next_profile.get("bio"),
                 "gender": next_profile.get("gender"),
                 "theme": next_profile.get("theme"),
+                "plan": next_profile.get("plan") or "free",
+                "plan_updated_at": next_profile.get("plan_updated_at"),
+                "byok_gemini_key": next_profile.get("byok_gemini_key"),
                 "updated_at": next_profile["updated_at"],
             }
             try:
@@ -1083,6 +1107,108 @@ class DBService:
             return verified
         self.profiles[user_id] = next_profile
         return next_profile
+
+    async def set_user_plan(self, user_id: str, plan: str) -> Dict[str, Any]:
+        return await self.upsert_profile(
+            user_id,
+            {
+                "plan": plan,
+                "plan_updated_at": datetime.utcnow().isoformat(),
+            },
+        )
+
+    def _usage_memory_key(self, user_id: str, day: Optional[str] = None) -> str:
+        day = day or datetime.utcnow().strftime("%Y-%m-%d")
+        return f"{user_id}:{day}"
+
+    def _empty_usage(self, user_id: str, day: Optional[str] = None) -> Dict[str, Any]:
+        day = day or datetime.utcnow().strftime("%Y-%m-%d")
+        return {
+            "user_id": user_id,
+            "usage_date": day,
+            "notes_gens": 0,
+            "flashcard_gens": 0,
+            "quiz_gens": 0,
+            "chat_msgs": 0,
+            "uploads": 0,
+        }
+
+    async def get_usage_today(self, user_id: str) -> Dict[str, Any]:
+        day = datetime.utcnow().strftime("%Y-%m-%d")
+        if self.supabase:
+            try:
+                res = (
+                    self.supabase.table("usage_daily")
+                    .select("*")
+                    .eq("user_id", user_id)
+                    .eq("usage_date", day)
+                    .limit(1)
+                    .execute()
+                )
+                if res.data:
+                    row = res.data[0]
+                    return {
+                        "user_id": user_id,
+                        "usage_date": day,
+                        "notes_gens": int(row.get("notes_gens") or 0),
+                        "flashcard_gens": int(row.get("flashcard_gens") or 0),
+                        "quiz_gens": int(row.get("quiz_gens") or 0),
+                        "chat_msgs": int(row.get("chat_msgs") or 0),
+                        "uploads": int(row.get("uploads") or 0),
+                    }
+            except Exception as e:
+                print(f"[DBService] Supabase get usage error: {e}")
+        key = self._usage_memory_key(user_id, day)
+        return self.usage_daily.get(key) or self._empty_usage(user_id, day)
+
+    async def increment_usage(self, user_id: str, action: str, amount: int = 1) -> Dict[str, Any]:
+        """Increment a daily usage counter. action: notes|flashcards|quizzes|chat|uploads"""
+        column = {
+            "notes": "notes_gens",
+            "flashcards": "flashcard_gens",
+            "quizzes": "quiz_gens",
+            "chat": "chat_msgs",
+            "uploads": "uploads",
+        }.get(action)
+        if not column:
+            raise ValueError(f"Unknown usage action: {action}")
+
+        day = datetime.utcnow().strftime("%Y-%m-%d")
+        current = await self.get_usage_today(user_id)
+        next_row = {**current, column: int(current.get(column, 0)) + amount}
+
+        if self.supabase:
+            try:
+                payload = {
+                    "user_id": user_id,
+                    "usage_date": day,
+                    "notes_gens": next_row["notes_gens"],
+                    "flashcard_gens": next_row["flashcard_gens"],
+                    "quiz_gens": next_row["quiz_gens"],
+                    "chat_msgs": next_row["chat_msgs"],
+                    "uploads": next_row["uploads"],
+                }
+                res = (
+                    self.supabase.table("usage_daily")
+                    .upsert(payload, on_conflict="user_id,usage_date")
+                    .execute()
+                )
+                if res.data:
+                    row = res.data[0]
+                    next_row = {
+                        "user_id": user_id,
+                        "usage_date": day,
+                        "notes_gens": int(row.get("notes_gens") or 0),
+                        "flashcard_gens": int(row.get("flashcard_gens") or 0),
+                        "quiz_gens": int(row.get("quiz_gens") or 0),
+                        "chat_msgs": int(row.get("chat_msgs") or 0),
+                        "uploads": int(row.get("uploads") or 0),
+                    }
+            except Exception as e:
+                print(f"[DBService] Supabase increment usage error: {e}")
+
+        self.usage_daily[self._usage_memory_key(user_id, day)] = next_row
+        return next_row
 
 
 db_service = DBService()

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from typing import Dict, Any, Optional
 from app.core.auth import get_current_user, require_verified_email
+from app.core.limits import check_and_consume_quota
 from app.core.ownership import require_session_owner
 from app.services.db_service import db_service
 from app.services.gemini_service import gemini_service
@@ -41,6 +42,9 @@ async def generate_notes(
             existing = await db_service.get_notes(session_id)
             if existing and existing.get("content"):
                 return existing
+
+        # Only meter when we actually call Gemini
+        await check_and_consume_quota(user["id"], "notes")
 
         document = None
         if session.get("document_id"):

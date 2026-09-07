@@ -8,6 +8,38 @@ export interface User {
   bio?: string | null;
   gender?: string | null;
   theme?: 'light' | 'dark' | null;
+  plan?: 'free' | 'student' | string;
+  has_byok?: boolean;
+  student_price_php?: number;
+}
+
+export interface PlanLimits {
+  notes: number;
+  flashcards: number;
+  quizzes: number;
+  chat: number;
+  uploads: number;
+}
+
+export interface UsageSnapshot {
+  plan: string;
+  plan_label: string;
+  price_php: number;
+  currency: string;
+  has_byok: boolean;
+  byok_bypasses_limits: boolean;
+  limits: PlanLimits;
+  used: PlanLimits;
+  resets_at: string;
+  student_price_php: number;
+}
+
+export interface BillingPlan {
+  id: string;
+  name: string;
+  price_php: number;
+  description: string;
+  limits: PlanLimits;
 }
 
 export interface AuthSession {

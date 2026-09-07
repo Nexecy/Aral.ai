@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from fastapi.responses import StreamingResponse
 from typing import List, Dict, Any, Optional
 from app.core.auth import get_current_user, require_verified_email
+from app.core.limits import check_and_consume_quota
 from app.core.ownership import require_session_owner
 from app.services.db_service import db_service
 from app.services.gemini_service import gemini_service
@@ -27,6 +28,7 @@ async def generate_flashcards(
         if session.get("document_id"):
             document = await db_service.get_document(session["document_id"])
             if document:
+                await check_and_consume_quota(user["id"], "notes")
                 source_text = document.get("extracted_text", "") or "Study guide content."
                 doc_title = document.get("filename", session.get("title", "Study Material"))
                 raw_notes = await gemini_service.generate_notes(source_text, doc_title)
@@ -37,6 +39,8 @@ async def generate_flashcards(
             status_code=400,
             detail="No study notes found for this session. Please upload a document or generate notes first."
         )
+
+    await check_and_consume_quota(user["id"], "flashcards")
 
     if stream:
         async def progress_generator():
