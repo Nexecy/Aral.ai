@@ -26,6 +26,43 @@ def _is_transient_rate_limit(e: BaseException) -> bool:
     return "429" in msg or "resource_exhausted" in msg or "quota" in msg or "rate limit" in msg or "too many requests" in msg
 
 
+def _extract_retry_delay_seconds(e: BaseException) -> Optional[float]:
+    """Extracts recommended retry delay seconds from Google Gemini 429/ResourceExhausted error or headers."""
+    # 1. Direct attribute on exception
+    retry_delay = getattr(e, "retry_delay", None)
+    if retry_delay is not None:
+        if isinstance(retry_delay, (int, float)):
+            return float(retry_delay)
+        if hasattr(retry_delay, "total_seconds"):
+            return float(retry_delay.total_seconds())
+        if hasattr(retry_delay, "seconds"):
+            return float(retry_delay.seconds)
+
+    # 2. HTTP response headers if attached
+    resp = getattr(e, "response", None)
+    if resp is not None and hasattr(resp, "headers"):
+        retry_after = resp.headers.get("Retry-After") or resp.headers.get("retry-after")
+        if retry_after:
+            try:
+                return float(retry_after)
+            except ValueError:
+                pass
+
+    # 3. Inspect message for Google's retry_delay protobuf or retry-after text
+    msg = str(e)
+    match = re.search(r"retry_delay\s*\{\s*seconds:\s*(\d+)", msg, re.IGNORECASE)
+    if match:
+        return float(match.group(1))
+    match = re.search(r"retry\s+(?:after|in)\s+(\d+(?:\.\d+)?)\s*(?:s|seconds)?", msg, re.IGNORECASE)
+    if match:
+        return float(match.group(1))
+    match = re.search(r"seconds:\s*(\d+)", msg, re.IGNORECASE)
+    if match:
+        return float(match.group(1))
+
+    return None
+
+
 class GeminiService:
     # Priority order of candidate models for fast and resilient generation
     CANDIDATE_MODELS = [
@@ -219,19 +256,36 @@ class GeminiService:
         return None
 
     @staticmethod
-    def _call_vision_model_with_retry(model: Any, prompt: str, image_part: Dict[str, Any]) -> Any:
-        """Invokes generate_content with tenacity exponential backoff on HTTP 429/ResourceExhausted."""
-        if HAS_TENACITY:
-            @retry(
-                reraise=True,
-                stop=stop_after_attempt(4),
-                wait=wait_exponential(multiplier=1.5, min=2, max=12),
-                retry=retry_if_exception(_is_transient_rate_limit)
-            )
-            def _invoke():
+    def _call_vision_model_with_retry(model: Any, prompt: str, image_part: Dict[str, Any], max_attempts: int = 4) -> Any:
+        """
+        Invokes generate_content with exponential backoff on HTTP 429/ResourceExhausted.
+        Inspects Google's retry_delay or Retry-After header/message when available.
+        """
+        import time
+        last_error = None
+        for attempt in range(1, max_attempts + 1):
+            try:
                 return model.generate_content([prompt, image_part], request_options={"timeout": 25})
-            return _invoke()
-        return model.generate_content([prompt, image_part], request_options={"timeout": 25})
+            except Exception as e:
+                last_error = e
+                if not _is_transient_rate_limit(e) or attempt == max_attempts:
+                    raise e
+
+                suggested_delay = _extract_retry_delay_seconds(e)
+                if suggested_delay is not None and suggested_delay > 0:
+                    wait_seconds = min(suggested_delay + 0.5, 30.0)
+                else:
+                    # Exponential backoff: attempt 1 -> 1.5s, attempt 2 -> 3.0s, attempt 3 -> 6.0s
+                    wait_seconds = min((2.0 ** (attempt - 1)) * 1.5, 12.0)
+
+                print(
+                    f"[GeminiService] Vision OCR 429 rate limit (attempt {attempt}/{max_attempts}). "
+                    f"Backing off for {wait_seconds:.1f}s: {e}"
+                )
+                time.sleep(wait_seconds)
+
+        if last_error:
+            raise last_error
 
     def transcribe_page_image_sync(self, image_bytes: bytes, mime_type: str = "image/jpeg") -> Optional[str]:
         """

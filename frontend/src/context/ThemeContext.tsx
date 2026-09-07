@@ -18,43 +18,43 @@ export const COLOR_SCHEMES: ColorSchemeOption[] = [
     id: 'indigo',
     name: 'Royal Indigo',
     hex: '#4f46e5',
-    description: 'Aral default — calm, focused, and deep'
+    description: 'Calm, focused indigo'
   },
   {
     id: 'emerald',
     name: 'Forest Emerald',
     hex: '#059669',
-    description: 'Fresh, balanced green for long study endurance'
+    description: 'Fresh, balanced green'
   },
   {
     id: 'blue',
     name: 'Ocean Blue',
     hex: '#2563eb',
-    description: 'Notion-inspired confident blue with crisp contrast'
+    description: 'Crisp, confident blue'
   },
   {
     id: 'purple',
     name: 'Amethyst Violet',
     hex: '#7c3aed',
-    description: 'Creative and vibrant purple for focused recall'
+    description: 'Vibrant, creative purple'
   },
   {
     id: 'rose',
     name: 'Crimson Rose',
     hex: '#e11d48',
-    description: 'Warm energetic rose for high-motivation review'
+    description: 'Warm, energetic rose'
   },
   {
     id: 'amber',
     name: 'Sunset Amber',
     hex: '#d97706',
-    description: 'Cozy, warm reading tone easy on the eyes'
+    description: 'Cozy, warm amber'
   },
   {
     id: 'teal',
     name: 'Midnight Teal',
     hex: '#0891b2',
-    description: 'Modern, clean cyan-teal aesthetic'
+    description: 'Modern, clean teal'
   }
 ];
 

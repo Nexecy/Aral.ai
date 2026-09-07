@@ -306,7 +306,7 @@ export default function SettingsPage() {
                   </label>
                 </div>
                 <p className="text-[10px] text-muted-foreground">
-                  Pick any custom brand or aesthetic tone.
+                  Choose any custom color.
                 </p>
               </div>
             </div>

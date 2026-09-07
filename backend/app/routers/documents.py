@@ -45,11 +45,11 @@ async def _process_document_background(
     user_id: str
 ):
     try:
-        async def on_page_resolved(page_num: int, current_text: str, current_page_count: int):
+        async def on_page_resolved(page_num: int, current_text: str, current_page_count: int, doc_status: str = "processing"):
             await db_service.update_document(doc_id, {
                 "extracted_text": current_text,
                 "page_count": current_page_count,
-                "status": "processing"
+                "status": doc_status
             })
 
         extracted = await pdf_service.extract_text_and_metadata_async(

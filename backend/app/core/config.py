@@ -38,7 +38,8 @@ class Settings(BaseSettings):
     PDF_OCR_MAX_PAGES: int = Field(default=50, description="Max pages to perform OCR on synchronously in one request")
     PDF_OCR_DPI: int = Field(default=150, description="DPI for OCR page rendering (150 DPI saves ~44% RAM vs 200 DPI)")
     PDF_OCR_MAX_DIMENSION: int = Field(default=2000, description="Max pixel width/height for rendered OCR pages")
-    PDF_OCR_CONCURRENCY: int = Field(default=5, description="Max concurrent OCR requests via asyncio.Semaphore")
+    PDF_OCR_CONCURRENCY: int = Field(default=1, description="Concurrency limit for Gemini Vision OCR tasks (1 strictly for free tier rate safety)")
+    GEMINI_OCR_DELAY_SECONDS: float = Field(default=4.2, description="Mandatory delay between consecutive Gemini Vision calls to stay strictly under 15 RPM")
 
     @property
     def frontend_origin(self) -> str:

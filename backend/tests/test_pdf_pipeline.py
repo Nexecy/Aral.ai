@@ -348,7 +348,8 @@ async def test_async_pdf_pipeline_bounded_concurrency():
             file_bytes=pdf_bytes,
             filename="concurrent_statcon.pdf",
             concurrency=concurrency_limit,
-            on_page_callback=mock_on_page
+            on_page_callback=mock_on_page,
+            ocr_delay=0.0
         )
 
     assert res["page_count"] == num_pages
@@ -365,7 +366,7 @@ def test_upload_endpoint_returns_202_accepted():
     Verify that POST /api/documents/upload returns HTTP 202 Accepted immediately
     with status 'processing' without blocking the caller.
     """
-    pdf_bytes = create_standard_pdf("Quick test document.")
+    pdf_bytes = create_standard_pdf("Quick test document for immediate upload verification and study session review.")
     response = client.post(
         "/api/documents/upload",
         files={"file": ("quick_upload.pdf", pdf_bytes, "application/pdf")},
@@ -410,5 +411,103 @@ def test_gemini_vision_tenacity_retry_on_429():
     )
     assert result.text == "Success after 429 retry."
     assert attempts == 3
+
+
+@pytest.mark.asyncio
+async def test_fast_path_direct_text_extraction():
+    """
+    Verify that digital PDFs with meaningful text (> 50 chars) bypass Gemini OCR completely,
+    parse in milliseconds with 0 API calls, and flag doc_status='ready'.
+    """
+    doc = fitz.open()
+    for i in range(10):
+        page = doc.new_page()
+        page.insert_text(
+            (50, 72),
+            f"Republic of the Philippines Supreme Court Decision page {i + 1}. "
+            "The doctrine of precedent is well established under Article 8 of the Civil Code.",
+            fontsize=12
+        )
+    pdf_bytes = doc.tobytes()
+    doc.close()
+
+    status_updates = []
+    async def mock_callback(page_num: int, current_text: str, current_page_count: int, doc_status: str = "processing"):
+        status_updates.append((page_num, doc_status))
+
+    res = await PDFService.extract_text_and_metadata_async(
+        file_bytes=pdf_bytes,
+        filename="digital_statcon.pdf",
+        on_page_callback=mock_callback,
+        ocr_delay=0.0
+    )
+
+    assert res["page_count"] == 10
+    assert res["extraction_summary"]["ocr_pages"] == 0
+    assert res["extraction_summary"]["native_pages"] == 10
+    assert "doctrine of precedent" in res["extracted_text"]
+    assert len(status_updates) >= 1
+    assert status_updates[-1][1] == "ready"
+
+
+@pytest.mark.asyncio
+async def test_progressive_availability_tier1_readiness():
+    """
+    Verify that for scanned PDFs needing OCR fallback, pages 1 to 5 (Tier 1) are prioritized
+    and trigger doc_status='ready' as soon as Tier 1 resolves.
+    """
+    from app.services.gemini_service import gemini_service
+
+    num_pages = 8
+    pdf_bytes = create_multi_page_scanned_pdf(num_pages=num_pages)
+    status_history = []
+
+    async def mock_transcribe(img_bytes: bytes, mime_type: str = "image/jpeg"):
+        return "Scanned page transcribed text."
+
+    async def mock_callback(page_num: int, current_text: str, current_page_count: int, doc_status: str = "processing"):
+        status_history.append((page_num, doc_status))
+
+    with patch.object(gemini_service, "transcribe_page_image", side_effect=mock_transcribe):
+        res = await PDFService.extract_text_and_metadata_async(
+            file_bytes=pdf_bytes,
+            filename="scanned_law_review.pdf",
+            on_page_callback=mock_callback,
+            concurrency=1,
+            ocr_delay=0.0
+        )
+
+    assert res["page_count"] == num_pages
+    assert len(status_history) == num_pages
+
+    # Page 5 (end of Tier 1) should transition status to 'ready'
+    assert status_history[4][1] == "ready"
+    # Subsequent pages should remain ready
+    assert status_history[5][1] == "ready"
+    assert status_history[7][1] == "ready"
+
+
+def test_extract_retry_delay_seconds():
+    """
+    Verify that _extract_retry_delay_seconds parses Google's protobuf format,
+    HTTP headers, and standard retry strings.
+    """
+    from app.services.gemini_service import _extract_retry_delay_seconds
+
+    class DummyProtoError(Exception):
+        pass
+
+    e1 = DummyProtoError("ResourceExhausted 429: Quota exceeded. Please wait. retry_delay { seconds: 14 }")
+    assert _extract_retry_delay_seconds(e1) == 14.0
+
+    e2 = DummyProtoError("Too many requests: retry after 6.5s")
+    assert _extract_retry_delay_seconds(e2) == 6.5
+
+    class DummyHeaderError(Exception):
+        class Response:
+            headers = {"Retry-After": "8"}
+        response = Response()
+
+    assert _extract_retry_delay_seconds(DummyHeaderError("Rate limit")) == 8.0
 
 

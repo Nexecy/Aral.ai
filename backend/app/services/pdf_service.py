@@ -2,6 +2,7 @@ import pymupdf as fitz
 import io
 import re
 import gc
+import time
 import asyncio
 import logging
 from typing import Dict, Any, List, Optional, Tuple
@@ -159,10 +160,14 @@ class PDFService:
         filename: str,
         concurrency: Optional[int] = None,
         on_page_callback: Optional[Any] = None,
+        ocr_delay: Optional[float] = None,
     ) -> Dict[str, Any]:
         """
-        Asynchronously parses and transcribes documents using bounded concurrency (asyncio.Semaphore),
-        in-memory JPEG streaming, immediate pixmap drops, progressive database persistence, and GC.
+        Asynchronously parses and transcribes documents using:
+        1. Fast-Path direct PyMuPDF text extraction (zero cost, instantaneous for digital PDFs).
+        2. Progressive user availability (pages 1 to 5 prioritized, unlocking document/session early).
+        3. Free-tier rate limiting (concurrency 1 default, 4.2s delay between Gemini Vision calls).
+        4. Strict in-loop memory reclamation (JPEG streaming, immediate pixmap drops, gc.collect).
         """
         name_lower = filename.lower()
         if not name_lower.endswith(".pdf"):
@@ -198,45 +203,136 @@ class PDFService:
                     logger.debug(f"[PDFService] Permission stripping notice for '{filename}': {e}")
 
             page_count = len(doc)
-            max_concurrency = concurrency or getattr(settings, "PDF_OCR_CONCURRENCY", 5)
-            semaphore = asyncio.Semaphore(max_concurrency)
-            render_lock = asyncio.Lock()
-
             page_results: Dict[int, Dict[str, Any]] = {}
+            pages_needing_ocr: List[int] = []
 
-            async def _process_page_async(page_num: int):
-                async with semaphore:
-                    img_bytes = None
-                    cleaned_text = ""
-                    needs_ocr = False
-                    reason = ""
+            # =========================================================================
+            # STEP 1: Fast-Path Direct Text Extraction (Zero Cost & Instant)
+            # Inspect each page: if meaningful text exists (> 50 chars) and not unmapped,
+            # record directly and skip Gemini OCR completely.
+            # =========================================================================
+            for page_num in range(page_count):
+                page = doc.load_page(page_num)
+                try:
+                    raw_text = page.get_text("text")
+                    cleaned_text = re.sub(r"\n{3,}", "\n\n", raw_text).strip()
+                    needs_ocr, reason = PDFService._is_poor_or_unmapped_text(cleaned_text, page)
 
-                    # Synchronize PyMuPDF page loading and JPEG rendering under lock
-                    async with render_lock:
-                        page = doc.load_page(page_num)
-                        try:
-                            raw_text = page.get_text("text")
-                            cleaned_text = re.sub(r"\n{3,}", "\n\n", raw_text).strip()
-                            needs_ocr, reason = PDFService._is_poor_or_unmapped_text(cleaned_text, page)
+                    if len(cleaned_text) > 50 and not needs_ocr:
+                        source_type = "decrypted_stream" if (was_encrypted or unlocked_with_empty_pass) else "native_stream"
+                        page_results[page_num] = {
+                            "page_number": page_num + 1,
+                            "text": cleaned_text,
+                            "source": source_type,
+                            "character_count": len(cleaned_text)
+                        }
+                    elif not needs_ocr and len(cleaned_text) > 0:
+                        source_type = "decrypted_stream" if (was_encrypted or unlocked_with_empty_pass) else "native_stream"
+                        page_results[page_num] = {
+                            "page_number": page_num + 1,
+                            "text": cleaned_text,
+                            "source": source_type,
+                            "character_count": len(cleaned_text)
+                        }
+                    else:
+                        pages_needing_ocr.append(page_num)
+                finally:
+                    del page
 
-                            if needs_ocr:
-                                # Render page at ~130-150 DPI directly to compressed JPEG byte buffer
+            def _build_current_text() -> str:
+                current_texts = [
+                    f"--- [Page {idx + 1}] ---\n{page_results[idx]['text']}"
+                    for idx in sorted(page_results.keys())
+                    if page_results[idx]["text"].strip()
+                ]
+                return "\n\n".join(current_texts)
+
+            # If all pages resolved via fast-path (zero OCR needed):
+            if not pages_needing_ocr:
+                if on_page_callback:
+                    try:
+                        import inspect
+                        cb_kwargs = {
+                            "page_num": page_count,
+                            "current_text": _build_current_text(),
+                            "current_page_count": page_count,
+                        }
+                        sig = inspect.signature(on_page_callback)
+                        if "doc_status" in sig.parameters:
+                            cb_kwargs["doc_status"] = "ready"
+                        await on_page_callback(**cb_kwargs)
+                    except Exception as cb_err:
+                        logger.debug(f"[PDFService] Fast-path callback notice: {cb_err}")
+
+            else:
+                # =====================================================================
+                # STEP 2 & 3: Progressive Availability, Free-Tier Rate Limiting & Memory-Safe OCR
+                # Prioritize Pages 1 to 5 first.
+                # =====================================================================
+                tier1_pages = [p for p in pages_needing_ocr if p < 5]
+                tier2_pages = [p for p in pages_needing_ocr if p >= 5]
+                ordered_ocr_pages = tier1_pages + tier2_pages
+
+                tier1_notified = False
+                tier1_target = min(5, page_count)
+
+                async def _notify_callback(page_num: int, doc_status: str):
+                    if not on_page_callback:
+                        return
+                    try:
+                        import inspect
+                        cb_kwargs = {
+                            "page_num": page_num,
+                            "current_text": _build_current_text(),
+                            "current_page_count": page_count,
+                        }
+                        sig = inspect.signature(on_page_callback)
+                        if "doc_status" in sig.parameters:
+                            cb_kwargs["doc_status"] = doc_status
+                        await on_page_callback(**cb_kwargs)
+                    except Exception as cb_err:
+                        logger.debug(f"[PDFService] Callback notice: {cb_err}")
+
+                # If pages 1 to 5 were already resolved by fast-path, unlock immediately
+                if len(tier1_pages) == 0:
+                    tier1_notified = True
+                    await _notify_callback(tier1_target, doc_status="ready")
+
+                max_concurrency = concurrency or getattr(settings, "PDF_OCR_CONCURRENCY", 1)
+                semaphore = asyncio.Semaphore(max_concurrency)
+                render_lock = asyncio.Lock()
+                ocr_delay_seconds = ocr_delay if ocr_delay is not None else getattr(settings, "GEMINI_OCR_DELAY_SECONDS", 4.2)
+                last_call_time = 0.0
+
+                async def _process_ocr_page(page_num: int):
+                    nonlocal last_call_time, tier1_notified
+                    async with semaphore:
+                        img_bytes = None
+                        async with render_lock:
+                            page = doc.load_page(page_num)
+                            try:
+                                # Render page sequentially at ~130-150 DPI directly to compressed JPEG byte buffer
                                 pix = page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5), alpha=False)
                                 img_bytes = pix.tobytes("jpeg")
-                                del pix  # Drop raw uncompressed pixmap immediately!
-                        finally:
-                            del page
+                                del pix  # Drop raw uncompressed bitmap buffer immediately!
+                            finally:
+                                del page
 
-                    if not needs_ocr:
-                        page_text = cleaned_text
-                        source_type = "decrypted_stream" if (was_encrypted or unlocked_with_empty_pass) else "native_stream"
-                    else:
-                        page_text = cleaned_text
+                        page_text = ""
                         source_type = "ocr_unavailable"
+
                         if img_bytes:
                             try:
+                                # Enforce mandatory rate-limiting delay between consecutive Gemini Vision calls
+                                if ocr_delay_seconds > 0 and last_call_time > 0.0:
+                                    elapsed = time.monotonic() - last_call_time
+                                    if elapsed < ocr_delay_seconds:
+                                        await asyncio.sleep(ocr_delay_seconds - elapsed)
+
                                 from app.services.gemini_service import gemini_service
+                                last_call_time = time.monotonic()
                                 ocr_result = await gemini_service.transcribe_page_image(img_bytes, mime_type="image/jpeg")
+
                                 if ocr_result and len(ocr_result.strip()) > 10:
                                     page_text = ocr_result.strip()
                                     source_type = "ocr_fallback (gemini_vision)"
@@ -247,37 +343,35 @@ class PDFService:
                                         source_type = "ocr_fallback (pytesseract)"
                             except Exception as e:
                                 logger.debug(f"[PDFService] OCR error on page {page_num + 1}: {e}")
-                            finally:
-                                del img_bytes
-                                gc.collect()
 
-                    page_results[page_num] = {
-                        "page_number": page_num + 1,
-                        "text": page_text,
-                        "source": source_type,
-                        "character_count": len(page_text)
-                    }
+                        page_results[page_num] = {
+                            "page_number": page_num + 1,
+                            "text": page_text,
+                            "source": source_type,
+                            "character_count": len(page_text)
+                        }
 
-                    # Persist extracted text progressively to Supabase as each page resolves
-                    if on_page_callback:
-                        try:
-                            current_texts = [
-                                f"--- [Page {idx + 1}] ---\n{page_results[idx]['text']}"
-                                for idx in sorted(page_results.keys())
-                                if page_results[idx]["text"].strip()
-                            ]
-                            await on_page_callback(
-                                page_num=page_num + 1,
-                                current_text="\n\n".join(current_texts),
-                                current_page_count=page_count
-                            )
-                        except Exception as cb_err:
-                            logger.debug(f"[PDFService] Progressive update callback notice: {cb_err}")
+                        # Check if Tier 1 (pages 1 to 5) has now completed
+                        tier1_complete_now = not tier1_notified and all(
+                            p in page_results for p in range(tier1_target)
+                        )
+                        doc_status = "ready" if (tier1_complete_now or tier1_notified) else "processing"
+                        if tier1_complete_now:
+                            tier1_notified = True
 
-                    gc.collect()
+                        # Persist extracted text to DB
+                        await _notify_callback(page_num + 1, doc_status=doc_status)
 
-            # Process all pages concurrently (bounded by semaphore to max 5 concurrent)
-            await asyncio.gather(*(_process_page_async(i) for i in range(page_count)))
+                        # Strictly in-loop memory reclamation: drop JPEG bytes and collect garbage
+                        if img_bytes is not None:
+                            del img_bytes
+                        gc.collect()
+
+                if max_concurrency == 1:
+                    for p in ordered_ocr_pages:
+                        await _process_ocr_page(p)
+                else:
+                    await asyncio.gather(*(_process_ocr_page(p) for p in ordered_ocr_pages))
 
             full_text_pages = []
             page_provenance = []
