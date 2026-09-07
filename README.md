@@ -107,3 +107,26 @@ venv\Scripts\pytest
 ## 🗄️ Supabase PostgreSQL Setup
 
 Copy the SQL statements in [`supabase/schema.sql`](file:///e:/2026%20Projects/Aral.ai/supabase/schema.sql) and run them inside your Supabase project's SQL Editor to set up tables, indexes, and Row Level Security (RLS) policies.
+
+---
+
+## 🚀 Production Deployment
+
+For local development the backend accepts requests **without a token** and resolves them to a shared single-user identity (`LOCAL_USER`). This keeps the app and the test suite runnable without configured auth — but it is **unsafe for a multi-user deployment**, where an unauthenticated caller would otherwise act as that shared account (reading/writing its data and hitting billing endpoints).
+
+This convenience fallback is disabled automatically when either of the following is true:
+
+- `ENVIRONMENT=production` is set, **or**
+- Supabase auth is configured (`SUPABASE_URL` + `SUPABASE_KEY`).
+
+When disabled, requests with a missing token or the `demo-token` sentinel return `401`, while valid Supabase-issued tokens continue to work.
+
+**Deployment checklist (backend):**
+
+- [ ] Set `ENVIRONMENT=production`.
+- [ ] Configure `SUPABASE_URL`, `SUPABASE_KEY`, and `SUPABASE_JWT_SECRET` for real authentication.
+- [ ] Set `GEMINI_API_KEY` (or rely on per-user BYOK keys).
+- [ ] Point `FRONTEND_URL` / `CORS_ORIGINS` at the deployed frontend origin.
+- [ ] Set a strong `BYOK_ENCRYPTION_SECRET` if BYOK keys are stored.
+
+> Setting Supabase credentials alone is already enough to disable the anonymous fallback; `ENVIRONMENT=production` is the explicit belt-and-suspenders signal.
