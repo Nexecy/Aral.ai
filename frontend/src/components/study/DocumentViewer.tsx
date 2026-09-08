@@ -106,7 +106,7 @@ function DocumentViewerImpl({
   const [chromeHovering, setChromeHovering] = useState(false);
 
   const viewerRootRef = useRef<HTMLDivElement | null>(null);
-  const { isFullscreen, isNativeFullscreen, toggle: toggleFullscreen, exit: exitFullscreen } = useViewerFullscreen();
+  const { isFullscreen, host: fullscreenHost, toggle: toggleFullscreen, exit: exitFullscreen } = useViewerFullscreen();
 
   const [pdfTotalPages, setPdfTotalPages] = useState<number>(document?.page_count || 1);
 
@@ -524,7 +524,7 @@ function DocumentViewerImpl({
     clearSelection();
   };
 
-  const overlayFullscreen = isFullscreen && !isNativeFullscreen;
+  const overlayFullscreen = Boolean(isFullscreen && fullscreenHost);
   const stageBg = pdfImmersive ? 'bg-charcoal-dark' : 'bg-surface-container-lowest';
 
   const viewer = (
@@ -546,10 +546,8 @@ function DocumentViewerImpl({
       }}
       className={`aral-pdf-fs-root flex flex-col overflow-hidden outline-none ${
         overlayFullscreen
-          ? `fixed inset-0 z-[10000] h-[100dvh] w-screen max-w-none rounded-none border-0 ${stageBg}`
-          : isFullscreen
-            ? `relative w-full h-full rounded-none border-0 ${stageBg}`
-            : 'relative bg-surface-container-lowest border border-outline-variant rounded-3xl'
+          ? `h-full w-full min-h-0 flex-1 rounded-none border-0 ${stageBg}`
+          : 'relative bg-surface-container-lowest border border-outline-variant rounded-3xl'
       }`}
       style={isFullscreen ? undefined : { height: `${height}px` }}
     >
@@ -706,7 +704,8 @@ function DocumentViewerImpl({
           )}
 
           <button
-            onClick={() => void toggleFullscreen()}
+            type="button"
+            onClick={() => toggleFullscreen()}
             className="w-9 h-9 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container transition-colors"
             title={isFullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen reader (or double-click the page)'}
             aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
@@ -754,7 +753,7 @@ function DocumentViewerImpl({
           searchTerm={searchTerm}
           selectionContainerRef={readerRef}
           immersive={pdfImmersive}
-          onToggleFullscreen={() => void toggleFullscreen()}
+          onToggleFullscreen={toggleFullscreen}
         />
       )}
 
@@ -832,7 +831,7 @@ function DocumentViewerImpl({
     </div>
   );
 
-  if (overlayFullscreen && typeof window !== 'undefined') {
+  if (overlayFullscreen) {
     return (
       <>
         <div
@@ -840,7 +839,7 @@ function DocumentViewerImpl({
           className="rounded-3xl border border-outline-variant bg-charcoal-dark/20"
           style={{ height: `${height}px` }}
         />
-        {createPortal(viewer, window.document.body)}
+        {createPortal(viewer, fullscreenHost as HTMLElement)}
       </>
     );
   }
