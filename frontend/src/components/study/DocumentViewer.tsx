@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlignLeft,
   ChevronLeft,
@@ -36,10 +36,12 @@ import { PdfViewer } from '@/components/study/viewers/PdfViewer';
 import { PageNavigatorPopover } from '@/components/study/PageNavigatorPopover';
 import { PdfFullscreenChrome } from '@/components/study/PdfFullscreenChrome';
 import { UploadProgressBar, UploadFileMeta } from '@/components/study/UploadProgressBar';
-import { useViewerFullscreen, requestNativeFullscreen } from '@/hooks/useViewerFullscreen';
+import { useViewerFullscreen } from '@/hooks/useViewerFullscreen';
 import { useIdleChrome } from '@/hooks/useIdleChrome';
 import { isTypingTarget } from '@/hooks/useHotkeys';
 import { createPortal } from 'react-dom';
+import { ZOOM_FIT, ZOOM_MIN, zoomLabel } from '@/lib/pdfjsClient';
+import type { PDFDocumentProxy } from 'pdfjs-dist';
 
 export const ACCEPTED_EXTENSIONS = [
   '.pdf', '.docx', '.doc', '.txt', '.md',
@@ -65,7 +67,7 @@ interface DocumentViewerProps {
   onExplainConcept?: (text: string) => void;
   /** Fired once the raw file has been fetched, so callers can cache it offline. */
   onFileFetched?: (blob: Blob) => void;
-  /** Expand the workspace PDF pane when the reader goes fullscreen. */
+  /** Called if the browser refuses device fullscreen, so the workspace can still expand. */
   onEnterFullscreen?: () => void;
 }
 
@@ -102,22 +104,29 @@ function DocumentViewerImpl({
 
   const [viewFormat, setViewFormat] = useState<ViewFormat>(supportsOriginal ? 'original' : 'text');
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [zoomLevel, setZoomLevel] = useState<number>(100);
+  const [zoomLevel, setZoomLevel] = useState<number>(ZOOM_FIT);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [showSearch, setShowSearch] = useState<boolean>(false);
   const [showPageNavigator, setShowPageNavigator] = useState<boolean>(false);
   const [chromeHovering, setChromeHovering] = useState(false);
 
   const viewerRootRef = useRef<HTMLDivElement | null>(null);
-  const { isFullscreen, toggle: toggleFullscreen, exit: exitFullscreen } = useViewerFullscreen();
+  const {
+    isFullscreen,
+    isNativeFullscreen,
+    isCssOverlay,
+    toggle: toggleFullscreen,
+    exit: exitFullscreen
+  } = useViewerFullscreen(viewerRootRef);
 
   const [pdfTotalPages, setPdfTotalPages] = useState<number>(document?.page_count || 1);
+  const [pdfJsDoc, setPdfJsDoc] = useState<PDFDocumentProxy | null>(null);
 
   const readerRef = useRef<HTMLDivElement | null>(null);
   const { selection, clearSelection } = useTextSelection(readerRef, true);
 
   const pdfImmersive = isFullscreen && viewFormat === 'original' && kind === 'pdf';
-  const zoomMin = isFullscreen ? 50 : 70;
+  const zoomMin = ZOOM_MIN;
   const zoomMax = isFullscreen ? 250 : 160;
   const chromePinned = chromeHovering || showSearch || showPageNavigator;
   const { visible: chromeVisible, bump: bumpChrome, setVisible: setChromeVisible } = useIdleChrome(
@@ -130,14 +139,12 @@ function DocumentViewerImpl({
       viewerRootRef.current?.focus({ preventScroll: true });
       return;
     }
-    setZoomLevel((z) => Math.min(160, Math.max(70, z)));
+    setZoomLevel((z) => Math.min(160, Math.max(ZOOM_MIN, z)));
   }, [isFullscreen]);
 
-  useLayoutEffect(() => {
-    if (!isFullscreen) return;
-    const el = viewerRootRef.current;
-    if (el) requestNativeFullscreen(el);
-  }, [isFullscreen]);
+  useEffect(() => {
+    if (isCssOverlay) onEnterFullscreen?.();
+  }, [isCssOverlay, onEnterFullscreen]);
 
   // The file route is user-scoped, so the bytes are fetched with the auth header
   // and rendered from an object URL rather than pointing `src` at the API.
@@ -147,7 +154,8 @@ function DocumentViewerImpl({
   useEffect(() => {
     setViewFormat(supportsOriginal ? 'original' : 'text');
     setCurrentPage(1);
-    setZoomLevel(100);
+    setZoomLevel(ZOOM_FIT);
+    setPdfJsDoc(null);
   }, [document?.id, supportsOriginal]);
 
   // Fetch once per document, mirroring the bytes so the session survives offline.
@@ -315,7 +323,7 @@ function DocumentViewerImpl({
       }
       if (e.key === '0' && !e.ctrlKey && !e.metaKey) {
         stop();
-        setZoomLevel(100);
+        setZoomLevel(ZOOM_FIT);
         bumpChrome();
       }
     };
@@ -552,13 +560,13 @@ function DocumentViewerImpl({
           setChromeVisible((v) => !v);
         }
       }}
-      className={`aral-pdf-fs-root flex flex-col overflow-hidden outline-none ${
+      className={`aral-pdf-fs-root relative flex flex-col overflow-hidden outline-none ${
         isFullscreen
           ? `rounded-none border-0 ${stageBg}`
-          : 'relative bg-surface-container-lowest border border-outline-variant rounded-3xl'
+          : 'bg-surface-container-lowest border border-outline-variant rounded-3xl'
       }`}
       style={
-        isFullscreen
+        isCssOverlay
           ? {
               position: 'fixed',
               top: 0,
@@ -574,7 +582,13 @@ function DocumentViewerImpl({
               flexDirection: 'column',
               background: pdfImmersive ? '#0f172a' : undefined
             }
-          : { height: `${height}px` }
+          : isNativeFullscreen
+            ? {
+                display: 'flex',
+                flexDirection: 'column',
+                background: pdfImmersive ? '#0f172a' : undefined
+              }
+            : { height: `${height}px` }
       }
     >
       {/* Toolbar — hidden in PDF immersive fullscreen (native-style overlay chrome instead) */}
@@ -694,21 +708,23 @@ function DocumentViewerImpl({
               <div className="flex items-center gap-1 bg-surface-container rounded-full px-2 py-1 border border-outline-variant/60">
                 <button
                   onClick={() => setZoomLevel((z) => Math.max(z - 10, zoomMin))}
-                  className="w-7 h-7 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-highest transition-colors"
+                  disabled={zoomLevel <= zoomMin}
+                  className="w-7 h-7 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-highest disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                   title="Zoom out"
                 >
                   <Minus className="w-3.5 h-3.5" />
                 </button>
                 <button
-                  onClick={() => setZoomLevel(100)}
-                  className="font-mono text-xs font-bold text-on-surface w-10 text-center"
-                  title="Reset zoom"
+                  onClick={() => setZoomLevel(ZOOM_FIT)}
+                  className="font-mono text-xs font-bold text-on-surface min-w-[2.5rem] px-1 text-center"
+                  title="Fit page to the viewer"
                 >
-                  {zoomLevel}%
+                  {zoomLabel(zoomLevel)}
                 </button>
                 <button
                   onClick={() => setZoomLevel((z) => Math.min(z + 10, zoomMax))}
-                  className="w-7 h-7 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-highest transition-colors"
+                  disabled={zoomLevel >= zoomMax}
+                  className="w-7 h-7 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-highest disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                   title="Zoom in"
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -734,11 +750,10 @@ function DocumentViewerImpl({
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              if (!isFullscreen) onEnterFullscreen?.();
               toggleFullscreen();
             }}
             className="w-9 h-9 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container transition-colors"
-            title={isFullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen reader (or double-click the page)'}
+            title={isFullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen — fills the entire screen'}
             aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
           >
             {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
@@ -779,15 +794,13 @@ function DocumentViewerImpl({
           onTotalPagesLoaded={(count) => {
             if (count > 0) setPdfTotalPages(count);
           }}
+          onDocumentLoaded={setPdfJsDoc}
           onPageChange={(page) => setCurrentPage(page)}
           zoomLevel={zoomLevel}
           searchTerm={searchTerm}
           selectionContainerRef={readerRef}
           immersive={pdfImmersive}
-          onToggleFullscreen={() => {
-            if (!isFullscreen) onEnterFullscreen?.();
-            toggleFullscreen();
-          }}
+          onToggleFullscreen={toggleFullscreen}
         />
       )}
 
@@ -828,7 +841,7 @@ function DocumentViewerImpl({
           onJumpPage={(page) => setCurrentPage(page)}
           onZoomIn={() => setZoomLevel((z) => Math.min(zoomMax, z + 10))}
           onZoomOut={() => setZoomLevel((z) => Math.max(zoomMin, z - 10))}
-          onZoomReset={() => setZoomLevel(100)}
+          onZoomReset={() => setZoomLevel(ZOOM_FIT)}
           onOpenThumbnails={() => setShowPageNavigator(true)}
           onToggleSearch={() => {
             setShowSearch((open) => {
@@ -860,12 +873,15 @@ function DocumentViewerImpl({
         isPdf={viewFormat === 'original' && kind === 'pdf'}
         extractedPages={pages}
         sessionTitle={sessionTitle}
+        pdfDocument={pdfJsDoc}
         portalTarget={isFullscreen ? viewerRootRef.current : undefined}
       />
     </div>
   );
 
-  if (isFullscreen && typeof window !== 'undefined') {
+  // Native Fullscreen API keeps the node in-place. Portaling would cancel it.
+  // Body portal is only the fallback when the browser refuses device fullscreen.
+  if (isCssOverlay && typeof window !== 'undefined') {
     return (
       <>
         <div

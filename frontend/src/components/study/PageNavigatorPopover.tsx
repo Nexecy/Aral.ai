@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import * as pdfjsLib from 'pdfjs-dist';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import {
   ChevronLeft,
@@ -18,6 +17,7 @@ import {
   RotateCcw
 } from 'lucide-react';
 import { Portal } from '@/components/ui/Portal';
+import { loadPdfDocument } from '@/lib/pdfjsClient';
 
 interface PageNavigatorPopoverProps {
   isOpen: boolean;
@@ -29,6 +29,8 @@ interface PageNavigatorPopoverProps {
   isPdf: boolean;
   extractedPages?: string[];
   sessionTitle?: string;
+  /** Reuse the already-parsed PDF from the viewer instead of loading it again. */
+  pdfDocument?: PDFDocumentProxy | null;
   /** Fullscreen roots swallow body portals; pass the viewer element instead. */
   portalTarget?: Element | null;
 }
@@ -71,13 +73,13 @@ function PdfPageThumbnailItem({
         const canvas = canvasRef.current;
         if (!canvas) return;
 
-        const dpr = Math.min(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1, 2);
+        const dpr = Math.min(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1, 1.5);
         canvas.width = Math.floor(viewport.width * dpr);
         canvas.height = Math.floor(viewport.height * dpr);
         canvas.style.width = `${Math.floor(viewport.width)}px`;
         canvas.style.height = `${Math.floor(viewport.height)}px`;
 
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { alpha: false });
         if (!ctx) return;
 
         ctx.fillStyle = '#ffffff';
@@ -86,7 +88,8 @@ function PdfPageThumbnailItem({
         renderTask = page.render({
           canvasContext: ctx,
           viewport,
-          transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined
+          transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined,
+          intent: 'display'
         });
 
         await renderTask.promise;
@@ -219,6 +222,7 @@ export function PageNavigatorPopover({
   fileUrl,
   isPdf,
   extractedPages,
+  pdfDocument,
   portalTarget
 }: PageNavigatorPopoverProps) {
   const popoverRef = useRef<HTMLDivElement | null>(null);
@@ -227,8 +231,9 @@ export function PageNavigatorPopover({
   const [jumpError, setJumpError] = useState<string | null>(null);
   const [thumbZoom, setThumbZoom] = useState<number>(100);
 
-  const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null);
+  const [internalPdfDoc, setInternalPdfDoc] = useState<PDFDocumentProxy | null>(null);
   const [loadingDoc, setLoadingDoc] = useState<boolean>(false);
+  const pdfDoc = pdfDocument || internalPdfDoc;
 
   // Computed thumbnail width based on user zoom level
   const thumbWidth = Math.round(135 * (thumbZoom / 100));
@@ -241,40 +246,30 @@ export function PageNavigatorPopover({
 
   // Load PDF document proxy once for thumbnail rendering
   useEffect(() => {
-    if (!isOpen || !isPdf || !fileUrl) return;
+    if (!isOpen || !isPdf) return;
+    if (pdfDocument) {
+      setLoadingDoc(false);
+      return;
+    }
+    if (!fileUrl) return;
 
     let cancelled = false;
-    let loadingTask: any = null;
+    let loadingTask: { destroy?: () => void } | null = null;
 
     async function loadPdf() {
       setLoadingDoc(true);
       try {
-        let doc: PDFDocumentProxy;
-        try {
-          const res = await fetch(fileUrl!);
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const buffer = await res.arrayBuffer();
-          if (cancelled) return;
-          loadingTask = pdfjsLib.getDocument({
-            data: new Uint8Array(buffer),
-            cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/',
-            cMapPacked: true,
-            standardFontDataUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/standard_fonts/'
-          });
-          doc = await loadingTask.promise;
-        } catch {
-          if (cancelled) return;
-          loadingTask = pdfjsLib.getDocument({
-            url: fileUrl!,
-            cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/',
-            cMapPacked: true,
-            standardFontDataUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/standard_fonts/'
-          });
-          doc = await loadingTask.promise;
+        const loaded = await loadPdfDocument(fileUrl!);
+        loadingTask = loaded.task;
+        if (cancelled) {
+          try {
+            loaded.task.destroy();
+          } catch {
+            /* ignore */
+          }
+          return;
         }
-
-        if (cancelled) return;
-        setPdfDoc(doc);
+        setInternalPdfDoc(loaded.doc);
         setLoadingDoc(false);
       } catch (err) {
         if (!cancelled) {
@@ -290,13 +285,13 @@ export function PageNavigatorPopover({
       cancelled = true;
       if (loadingTask) {
         try {
-          loadingTask.destroy();
+          loadingTask.destroy?.();
         } catch {
           /* ignore */
         }
       }
     };
-  }, [isOpen, isPdf, fileUrl]);
+  }, [isOpen, isPdf, fileUrl, pdfDocument]);
 
   // Auto-scroll current page thumbnail into view when opened
   useEffect(() => {

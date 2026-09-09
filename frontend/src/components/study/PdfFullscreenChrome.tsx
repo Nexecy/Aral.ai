@@ -11,6 +11,7 @@ import {
   Search,
   X
 } from 'lucide-react';
+import { zoomLabel } from '@/lib/pdfjsClient';
 
 interface PdfFullscreenChromeProps {
   visible: boolean;
@@ -179,9 +180,9 @@ export function PdfFullscreenChrome({
               type="button"
               onClick={onZoomReset}
               className="min-w-[3.25rem] h-10 px-2 rounded-full text-xs font-mono font-bold text-white/90 hover:bg-white/15"
-              title="Fit to width"
+              title="Fit page to the screen"
             >
-              {zoomLevel}%
+              {zoomLabel(zoomLevel)}
             </button>
             <button type="button" onClick={onZoomIn} className={chromeBtn} aria-label="Zoom in">
               <Plus className="w-4 h-4" />

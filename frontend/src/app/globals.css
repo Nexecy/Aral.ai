@@ -338,9 +338,19 @@ html.aral-pdf-fs body {
 
 .aral-pdf-fs-root:fullscreen,
 .aral-pdf-fs-root:-webkit-full-screen {
+  box-sizing: border-box !important;
+  position: relative !important;
   width: 100% !important;
   height: 100% !important;
-  inset: 0 !important;
-  background-color: #0f172a;
+  max-width: none !important;
+  max-height: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  inset: auto !important;
+  background-color: #0f172a !important;
+  display: flex !important;
+  flex-direction: column !important;
 }
 
