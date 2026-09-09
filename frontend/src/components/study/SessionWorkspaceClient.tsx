@@ -568,6 +568,10 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
     });
   }, [sessionId]);
 
+  const handleEnterPdfFullscreen = useCallback(() => {
+    setViewMode('pdf');
+  }, []);
+
   // ── Snapshot handlers ─────────────────────────────────────────────────────────
   const handleRegenerateNotes = async () => {
     setNotesGenerating(true);
@@ -1232,6 +1236,7 @@ export function SessionWorkspaceClient({ sessionId }: SessionWorkspaceClientProp
                 onCreateFlashcard={handleCreateFlashcard}
                 onExplainConcept={handleExplainConcept}
                 onFileFetched={handleFileFetched}
+                onEnterFullscreen={handleEnterPdfFullscreen}
               />
             </div>
 

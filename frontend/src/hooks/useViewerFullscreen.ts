@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 type DocWithWebkit = Document & {
   webkitFullscreenElement?: Element | null;
@@ -11,165 +11,70 @@ type ElWithWebkit = HTMLElement & {
   webkitRequestFullscreen?: () => Promise<void> | void;
 };
 
-const HOST_ID = 'aral-pdf-fs-host';
-
-function fullscreenElement(): Element | null {
+function exitNativeFullscreen() {
   const doc = document as DocWithWebkit;
-  return document.fullscreenElement || doc.webkitFullscreenElement || null;
+  const exit = document.exitFullscreen?.bind(document) || doc.webkitExitFullscreen?.bind(document);
+  if (!exit) return;
+  try {
+    void Promise.resolve(exit());
+  } catch {
+    /* ignore */
+  }
 }
 
-function requestNativeFullscreen(el: HTMLElement): Promise<void> {
+export function requestNativeFullscreen(el: HTMLElement) {
   if (typeof el.requestFullscreen === 'function') {
     try {
-      return Promise.resolve(el.requestFullscreen({ navigationUI: 'hide' }));
+      void el.requestFullscreen({ navigationUI: 'hide' });
+      return;
     } catch {
-      return Promise.resolve(el.requestFullscreen());
+      void el.requestFullscreen();
+      return;
     }
   }
   const webkit = (el as ElWithWebkit).webkitRequestFullscreen;
-  if (typeof webkit === 'function') {
-    return Promise.resolve(webkit.call(el));
-  }
-  return Promise.reject(new Error('Fullscreen API unavailable'));
-}
-
-function exitNativeFullscreen(): Promise<void> {
-  const doc = document as DocWithWebkit;
-  const exit = document.exitFullscreen?.bind(document) || doc.webkitExitFullscreen?.bind(document);
-  if (!exit || !fullscreenElement()) return Promise.resolve();
-  return Promise.resolve(exit());
-}
-
-function applyHostStyles(host: HTMLElement, active: boolean) {
-  if (!active) {
-    host.setAttribute('hidden', '');
-    host.style.cssText = 'display:none';
-    return;
-  }
-  host.removeAttribute('hidden');
-  host.style.cssText = [
-    'display:flex',
-    'flex-direction:column',
-    'position:fixed',
-    'top:0',
-    'right:0',
-    'bottom:0',
-    'left:0',
-    'width:100vw',
-    'height:100vh',
-    'height:100dvh',
-    'margin:0',
-    'padding:0',
-    'border:0',
-    'z-index:2147483647',
-    'background:#0f172a',
-    'overflow:hidden'
-  ].join(';');
-}
-
-function ensureHost(): HTMLElement {
-  const doc = window.document;
-  let host = doc.getElementById(HOST_ID) as HTMLElement | null;
-  if (!host) {
-    host = doc.createElement('div');
-    host.id = HOST_ID;
-    host.setAttribute('role', 'presentation');
-    doc.body.appendChild(host);
-  }
-  return host;
+  if (typeof webkit === 'function') webkit.call(el);
 }
 
 /**
- * Fullscreen the PDF on a body-level host. The workspace card uses
- * `backdrop-filter`, which traps `position:fixed` descendants — so the reader
- * must leave that tree. Native Fullscreen API is requested on the host in the
- * same click as showing it, so the browser chrome can hide too.
+ * App-covering PDF reader. Native Fullscreen API is optional (hides browser
+ * chrome). The overlay itself is React state + a body portal with inline
+ * fixed positioning — it must not depend on the Fullscreen API succeeding.
  */
 export function useViewerFullscreen() {
-  const [active, setActive] = useState(false);
-  const [host, setHost] = useState<HTMLElement | null>(null);
-  const nativeOnRef = useRef(false);
-  const hostRef = useRef<HTMLElement | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
-  const isFullscreen = active;
-
-  useEffect(() => {
-    const sync = () => {
-      const fsEl = fullscreenElement();
-      if (nativeOnRef.current && fsEl !== hostRef.current) {
-        nativeOnRef.current = false;
-        setActive(false);
-      }
-    };
-    document.addEventListener('fullscreenchange', sync);
-    document.addEventListener('webkitfullscreenchange', sync);
-    return () => {
-      document.removeEventListener('fullscreenchange', sync);
-      document.removeEventListener('webkitfullscreenchange', sync);
-    };
-  }, []);
-
-  useEffect(() => {
-    const node = hostRef.current;
-    if (!node) return;
-    applyHostStyles(node, active);
-    const html = window.document.documentElement;
-    const prevHtml = html.style.overflow;
-    const prevBody = window.document.body.style.overflow;
-    if (active) {
-      html.style.overflow = 'hidden';
-      window.document.body.style.overflow = 'hidden';
-    }
-    return () => {
-      html.style.overflow = prevHtml;
-      window.document.body.style.overflow = prevBody;
-      if (!active) applyHostStyles(node, false);
-    };
-  }, [active]);
-
-  const exit = useCallback(async () => {
-    nativeOnRef.current = false;
-    try {
-      await exitNativeFullscreen();
-    } catch {
-      /* ignore */
-    }
-    setActive(false);
+  const exit = useCallback(() => {
+    exitNativeFullscreen();
+    setIsFullscreen(false);
+    window.document.documentElement.classList.remove('aral-pdf-fs');
+    window.document.body.style.overflow = '';
   }, []);
 
   const toggle = useCallback(() => {
-    if (active) {
-      void exit();
-      return;
-    }
-
-    const node = ensureHost();
-    hostRef.current = node;
-    applyHostStyles(node, true);
-    setHost(node);
-    setActive(true);
-
-    try {
-      void requestNativeFullscreen(node).then(() => {
-        window.setTimeout(() => {
-          if (fullscreenElement() === hostRef.current) nativeOnRef.current = true;
-        }, 400);
-      }).catch(() => {
-        nativeOnRef.current = false;
-      });
-    } catch {
-      nativeOnRef.current = false;
-    }
-  }, [active, exit]);
-
-  useEffect(() => {
-    return () => {
-      nativeOnRef.current = false;
-      const node = hostRef.current;
-      if (node) applyHostStyles(node, false);
-      void exitNativeFullscreen();
-    };
+    setIsFullscreen((open) => {
+      if (open) {
+        exitNativeFullscreen();
+        window.document.documentElement.classList.remove('aral-pdf-fs');
+        window.document.body.style.overflow = '';
+        return false;
+      }
+      window.document.documentElement.classList.add('aral-pdf-fs');
+      window.document.body.style.overflow = 'hidden';
+      return true;
+    });
   }, []);
 
-  return { isFullscreen, host, toggle, exit };
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const html = window.document.documentElement;
+    html.classList.add('aral-pdf-fs');
+    window.document.body.style.overflow = 'hidden';
+    return () => {
+      html.classList.remove('aral-pdf-fs');
+      window.document.body.style.overflow = '';
+    };
+  }, [isFullscreen]);
+
+  return { isFullscreen, toggle, exit };
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   AlignLeft,
   ChevronLeft,
@@ -36,7 +36,7 @@ import { PdfViewer } from '@/components/study/viewers/PdfViewer';
 import { PageNavigatorPopover } from '@/components/study/PageNavigatorPopover';
 import { PdfFullscreenChrome } from '@/components/study/PdfFullscreenChrome';
 import { UploadProgressBar, UploadFileMeta } from '@/components/study/UploadProgressBar';
-import { useViewerFullscreen } from '@/hooks/useViewerFullscreen';
+import { useViewerFullscreen, requestNativeFullscreen } from '@/hooks/useViewerFullscreen';
 import { useIdleChrome } from '@/hooks/useIdleChrome';
 import { isTypingTarget } from '@/hooks/useHotkeys';
 import { createPortal } from 'react-dom';
@@ -65,6 +65,8 @@ interface DocumentViewerProps {
   onExplainConcept?: (text: string) => void;
   /** Fired once the raw file has been fetched, so callers can cache it offline. */
   onFileFetched?: (blob: Blob) => void;
+  /** Expand the workspace PDF pane when the reader goes fullscreen. */
+  onEnterFullscreen?: () => void;
 }
 
 const KIND_ICON: Record<PreviewKind, typeof FileText> = {
@@ -87,7 +89,8 @@ function DocumentViewerImpl({
   onAskTutor,
   onCreateFlashcard,
   onExplainConcept,
-  onFileFetched
+  onFileFetched,
+  onEnterFullscreen
 }: DocumentViewerProps) {
   const router = useRouter();
   const { allowed: aiAllowed } = useEmailGate();
@@ -106,7 +109,7 @@ function DocumentViewerImpl({
   const [chromeHovering, setChromeHovering] = useState(false);
 
   const viewerRootRef = useRef<HTMLDivElement | null>(null);
-  const { isFullscreen, host: fullscreenHost, toggle: toggleFullscreen, exit: exitFullscreen } = useViewerFullscreen();
+  const { isFullscreen, toggle: toggleFullscreen, exit: exitFullscreen } = useViewerFullscreen();
 
   const [pdfTotalPages, setPdfTotalPages] = useState<number>(document?.page_count || 1);
 
@@ -128,6 +131,12 @@ function DocumentViewerImpl({
       return;
     }
     setZoomLevel((z) => Math.min(160, Math.max(70, z)));
+  }, [isFullscreen]);
+
+  useLayoutEffect(() => {
+    if (!isFullscreen) return;
+    const el = viewerRootRef.current;
+    if (el) requestNativeFullscreen(el);
   }, [isFullscreen]);
 
   // The file route is user-scoped, so the bytes are fetched with the auth header
@@ -524,7 +533,6 @@ function DocumentViewerImpl({
     clearSelection();
   };
 
-  const overlayFullscreen = Boolean(isFullscreen && fullscreenHost);
   const stageBg = pdfImmersive ? 'bg-charcoal-dark' : 'bg-surface-container-lowest';
 
   const viewer = (
@@ -545,11 +553,29 @@ function DocumentViewerImpl({
         }
       }}
       className={`aral-pdf-fs-root flex flex-col overflow-hidden outline-none ${
-        overlayFullscreen
-          ? `h-full w-full min-h-0 flex-1 rounded-none border-0 ${stageBg}`
+        isFullscreen
+          ? `rounded-none border-0 ${stageBg}`
           : 'relative bg-surface-container-lowest border border-outline-variant rounded-3xl'
       }`}
-      style={isFullscreen ? undefined : { height: `${height}px` }}
+      style={
+        isFullscreen
+          ? {
+              position: 'fixed',
+              top: 0,
+              right: 0,
+              bottom: 0,
+              left: 0,
+              width: '100vw',
+              height: '100dvh',
+              maxHeight: '100dvh',
+              margin: 0,
+              zIndex: 2147483647,
+              display: 'flex',
+              flexDirection: 'column',
+              background: pdfImmersive ? '#0f172a' : undefined
+            }
+          : { height: `${height}px` }
+      }
     >
       {/* Toolbar — hidden in PDF immersive fullscreen (native-style overlay chrome instead) */}
       {!pdfImmersive && (
@@ -705,7 +731,12 @@ function DocumentViewerImpl({
 
           <button
             type="button"
-            onClick={() => toggleFullscreen()}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (!isFullscreen) onEnterFullscreen?.();
+              toggleFullscreen();
+            }}
             className="w-9 h-9 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container transition-colors"
             title={isFullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen reader (or double-click the page)'}
             aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
@@ -753,7 +784,10 @@ function DocumentViewerImpl({
           searchTerm={searchTerm}
           selectionContainerRef={readerRef}
           immersive={pdfImmersive}
-          onToggleFullscreen={toggleFullscreen}
+          onToggleFullscreen={() => {
+            if (!isFullscreen) onEnterFullscreen?.();
+            toggleFullscreen();
+          }}
         />
       )}
 
@@ -831,7 +865,7 @@ function DocumentViewerImpl({
     </div>
   );
 
-  if (overlayFullscreen) {
+  if (isFullscreen && typeof window !== 'undefined') {
     return (
       <>
         <div
@@ -839,7 +873,7 @@ function DocumentViewerImpl({
           className="rounded-3xl border border-outline-variant bg-charcoal-dark/20"
           style={{ height: `${height}px` }}
         />
-        {createPortal(viewer, fullscreenHost as HTMLElement)}
+        {createPortal(viewer, window.document.body as unknown as HTMLElement)}
       </>
     );
   }
