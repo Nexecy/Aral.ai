@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { 
   Check, 
   Edit3, 
@@ -10,24 +10,38 @@ import {
   Sparkles, 
   Tag, 
   BookOpen, 
-  CheckCircle2,
   Loader2,
   Layers,
-  ArrowRight,
-  HelpCircle,
   RotateCw,
   Scale,
   Gavel,
-  FileText,
   Copy,
   ShieldAlert,
-  ListOrdered,
-  Bookmark,
-  ChevronDown,
-  ChevronUp
+  ListOrdered
 } from 'lucide-react';
-import { Notes, NoteContent, NoteSection, KeyTerm, LegalCase, LegalDoctrine } from '@/lib/types';
+import { Notes, NoteContent, NoteMark, NotesHighlightColor, NotesHighlightMode, NotesMarkKind, LegalCase, LegalDoctrine } from '@/lib/types';
 import { api } from '@/lib/api';
+import { useLocalStorageState } from '@/hooks/useLocalStorageState';
+import { useNotesFieldSelection } from '@/hooks/useNotesFieldSelection';
+import { NotesAnnotatedText } from '@/components/study/NotesAnnotatedText';
+import { NotesDocumentToolbar } from '@/components/study/NotesDocumentToolbar';
+import { NotesSelectionMenu } from '@/components/study/NotesSelectionMenu';
+import {
+  NOTES_FONT_SIZE_STORAGE_KEY,
+  NOTES_HIGHLIGHT_MODE_STORAGE_KEY,
+  NotesFontSize,
+  getNotesTypeScale,
+  isNotesFontSize,
+  notesScaleVars
+} from '@/lib/notesPreferences';
+import {
+  collectAutoTerms,
+  clearMarksInRange,
+  isNotesHighlightMode,
+  makeMark,
+  normalizeNoteContent,
+  upsertMark
+} from '@/lib/notesPresentation';
 
 interface NotesReviewEditorProps {
   sessionId: string;
@@ -44,37 +58,108 @@ export function NotesReviewEditor({
   onConfirmReview,
   onRegenerateNotes
 }: NotesReviewEditorProps) {
-  const [content, setContent] = useState<NoteContent>(() => {
-    const initial = initialNotes?.content;
-    return {
-      title: initial?.title || 'Extracted Study Notes',
-      summary: initial?.summary || '',
-      document_type: initial?.document_type || 'general',
-      sections: initial?.sections || [],
-      cases: initial?.cases || [],
-      doctrines: initial?.doctrines || []
-    };
-  });
+  const [content, setContent] = useState<NoteContent>(() => normalizeNoteContent(initialNotes?.content));
   
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
-  const [isReviewed, setIsReviewed] = useState<boolean>(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'cases' | 'doctrines' | 'sections'>('all');
   const [copiedCaseId, setCopiedCaseId] = useState<string | null>(null);
+  const [highlightColor, setHighlightColor] = useState<NotesHighlightColor>('yellow');
+  const [fontSize, setFontSize] = useLocalStorageState<NotesFontSize>(
+    NOTES_FONT_SIZE_STORAGE_KEY,
+    'default',
+    (raw) => (isNotesFontSize(raw) ? raw : null)
+  );
+  const [storedHighlightMode, setStoredHighlightMode] = useLocalStorageState<NotesHighlightMode>(
+    NOTES_HIGHLIGHT_MODE_STORAGE_KEY,
+    'off',
+    (raw) => (isNotesHighlightMode(raw) ? raw : null)
+  );
+
+  const documentRef = useRef<HTMLDivElement | null>(null);
+  const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const highlightMode: NotesHighlightMode = content.presentation?.highlight_mode ?? storedHighlightMode;
+  const marks = content.presentation?.marks || [];
+  const autoTerms = useMemo(() => collectAutoTerms(content), [content]);
+  const formattingEnabled = !isEditing;
+  const { selection, clearSelection } = useNotesFieldSelection(documentRef, formattingEnabled);
 
   useEffect(() => {
     if (initialNotes?.content) {
-      setContent({
-        title: initialNotes.content.title || 'Extracted Study Notes',
-        summary: initialNotes.content.summary || '',
-        document_type: initialNotes.content.document_type || 'general',
-        sections: initialNotes.content.sections || [],
-        cases: initialNotes.content.cases || [],
-        doctrines: initialNotes.content.doctrines || []
-      });
+      setContent(normalizeNoteContent(initialNotes.content));
     }
   }, [initialNotes]);
+
+  useEffect(() => {
+    return () => {
+      if (persistTimer.current) clearTimeout(persistTimer.current);
+    };
+  }, []);
+
+  const persistNotes = useCallback((next: NoteContent, scope = 'reviewed edit') => {
+    if (persistTimer.current) clearTimeout(persistTimer.current);
+    persistTimer.current = setTimeout(() => {
+      api.updateNotes(sessionId, next, scope).catch(() => {
+        /* Keep local marks even if the network save fails; Save Changes still works. */
+      });
+    }, 800);
+  }, [sessionId]);
+
+  const patchPresentation = useCallback((
+    updater: (currentMarks: NoteMark[], mode: NotesHighlightMode) => { marks?: NoteMark[]; highlight_mode?: NotesHighlightMode },
+    persist = true
+  ) => {
+    setContent((prev) => {
+      const currentMarks = prev.presentation?.marks || [];
+      const currentMode = prev.presentation?.highlight_mode || storedHighlightMode;
+      const patch = updater(currentMarks, currentMode);
+      const next: NoteContent = {
+        ...prev,
+        presentation: {
+          highlight_mode: patch.highlight_mode ?? currentMode,
+          marks: patch.marks ?? currentMarks
+        }
+      };
+      if (persist) persistNotes(next, 'notes formatting');
+      return next;
+    });
+  }, [persistNotes, storedHighlightMode]);
+
+  const handleHighlightModeChange = (mode: NotesHighlightMode) => {
+    setStoredHighlightMode(mode);
+    patchPresentation(() => ({ highlight_mode: mode }));
+  };
+
+  const applyMark = (kind: NotesMarkKind, color?: NotesHighlightColor) => {
+    if (!selection) return;
+    const nextMark = makeMark(
+      selection.path,
+      selection.start,
+      selection.end,
+      selection.text,
+      kind,
+      kind === 'highlight' ? { color: color || highlightColor, source: 'manual' } : undefined
+    );
+    patchPresentation((current) => ({ marks: upsertMark(current, nextMark) }));
+  };
+
+  const handleFormat = (kind: 'bold' | 'italic' | 'underline') => applyMark(kind);
+
+  const handleHighlight = (color: NotesHighlightColor) => {
+    setHighlightColor(color);
+    if (highlightMode !== 'manual') handleHighlightModeChange('manual');
+    applyMark('highlight', color);
+  };
+
+  const handleClearSelectionMarks = () => {
+    if (!selection) return;
+    patchPresentation((current) => ({
+      marks: clearMarksInRange(current, selection.path, selection.start, selection.end)
+    }));
+    clearSelection();
+  };
 
   const hasCases = Boolean(content.cases && content.cases.length > 0);
   const hasDoctrines = Boolean(content.doctrines && content.doctrines.length > 0);
@@ -286,6 +371,10 @@ export function NotesReviewEditor({
   const handleSave = async () => {
     setSaving(true);
     setSaveMessage(null);
+    if (persistTimer.current) {
+      clearTimeout(persistTimer.current);
+      persistTimer.current = null;
+    }
     try {
       await api.updateNotes(sessionId, content, 'reviewed edit');
       setIsEditing(false);
@@ -298,18 +387,37 @@ export function NotesReviewEditor({
     }
   };
 
-  // ── Confirm and Unlock Flashcards & Quizzes ────────────────────────────────
   const handleConfirmAndProceed = async () => {
     setSaving(true);
     try {
       const updated = await api.updateNotes(sessionId, content, 'confirmed review');
-      setIsReviewed(true);
       onConfirmReview(updated);
     } catch (e: any) {
       alert(`Confirmation failed: ${e.message}`);
     } finally {
       setSaving(false);
     }
+  };
+
+  useEffect(() => {
+    if (!formattingEnabled) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+      const key = e.key.toLowerCase();
+      if (key === 'b' || key === 'i' || key === 'u') {
+        if (!selection) return;
+        e.preventDefault();
+        handleFormat(key === 'b' ? 'bold' : key === 'i' ? 'italic' : 'underline');
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [formattingEnabled, selection, handleFormat]);
+
+  const annot = {
+    marks,
+    autoTerms,
+    highlightMode
   };
 
   return (
@@ -440,8 +548,37 @@ export function NotesReviewEditor({
         </div>
       )}
       
+      <div className="max-w-[820px] mx-auto w-full space-y-3">
+      <NotesDocumentToolbar
+        highlightMode={highlightMode}
+        onHighlightModeChange={handleHighlightModeChange}
+        activeColor={highlightColor}
+        onColorChange={handleHighlight}
+        fontSize={fontSize}
+        onFontSizeChange={setFontSize}
+        formattingEnabled={formattingEnabled}
+        onFormat={handleFormat}
+      />
+
+      {formattingEnabled && (
+        <NotesSelectionMenu
+          selection={selection}
+          marks={marks}
+          highlightMode={highlightMode}
+          activeColor={highlightColor}
+          onFormat={handleFormat}
+          onHighlight={handleHighlight}
+          onClear={handleClearSelectionMarks}
+          onDismiss={clearSelection}
+        />
+      )}
+      
       {/* Main Notes Sheet */}
-      <div className="bg-card border border-border rounded-2xl p-6 sm:p-8 md:p-10 shadow-notion-soft space-y-10">
+      <div
+        ref={documentRef}
+        style={notesScaleVars(getNotesTypeScale(fontSize))}
+        className="notes-document bg-card border border-border rounded-2xl p-6 sm:p-10 md:p-12 shadow-notion-elevated space-y-10 w-full"
+      >
         {/* Title & Summary */}
         <div className="space-y-3 pb-6 border-b border-border">
           {isEditing ? (
@@ -452,9 +589,13 @@ export function NotesReviewEditor({
               className="w-full font-bold text-xl sm:text-2xl md:text-3xl text-foreground bg-muted/40 p-2.5 rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary"
             />
           ) : (
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight text-foreground leading-snug">
-              {content.title}
-            </h1>
+            <NotesAnnotatedText
+              path="title"
+              text={content.title}
+              {...annot}
+              as="h1"
+              className="notes-title font-extrabold tracking-tight text-foreground leading-snug"
+            />
           )}
 
           {isEditing ? (
@@ -471,9 +612,14 @@ export function NotesReviewEditor({
                 <Sparkles className="w-3 h-3" />
                 <span>Executive Summary & Overview</span>
               </div>
-              <p className="text-sm sm:text-[15px] text-foreground/90 leading-relaxed font-normal">
-                {content.summary || 'Comprehensive structured review material extracted from your study text.'}
-              </p>
+              <NotesAnnotatedText
+                path="summary"
+                text={content.summary}
+                {...annot}
+                as="p"
+                className="text-foreground/90 leading-relaxed font-normal"
+                emptyFallback="Comprehensive structured review material extracted from your study text."
+              />
             </div>
           )}
         </div>
@@ -487,7 +633,7 @@ export function NotesReviewEditor({
                   <Scale className="w-4 h-4" />
                 </div>
                 <div>
-                  <h2 className="text-lg sm:text-xl font-extrabold text-foreground">
+                  <h2 className="notes-h2 font-extrabold text-foreground">
                     Jurisprudence & Case Briefs
                   </h2>
                   <p className="text-xs text-muted-foreground">
@@ -549,8 +695,8 @@ export function NotesReviewEditor({
                             </div>
                           ) : (
                             <>
-                              <h3 className="font-extrabold text-base sm:text-lg text-foreground tracking-tight flex items-center gap-2">
-                                <span>{c.case_name}</span>
+                              <h3 className="font-extrabold notes-h3 text-foreground tracking-tight flex items-center gap-2">
+                                <NotesAnnotatedText path={`cases.${cIdx}.case_name`} text={c.case_name} {...annot} />
                               </h3>
                               <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                                 {c.citation && (
@@ -604,7 +750,7 @@ export function NotesReviewEditor({
                       </div>
 
                       {/* FIR Body: Facts, Issue, Ruling */}
-                      <div className="space-y-3.5 text-xs sm:text-[13px] leading-relaxed">
+                      <div className="space-y-3.5 leading-relaxed">
                         {/* Facts */}
                         <div className="space-y-1">
                           <div className="font-bold text-[11px] uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
@@ -620,9 +766,14 @@ export function NotesReviewEditor({
                               placeholder="Concise factual antecedents..."
                             />
                           ) : (
-                            <p className="text-foreground/90 pl-3 border-l-2 border-border/80">
-                              {c.facts || 'No facts provided.'}
-                            </p>
+                            <NotesAnnotatedText
+                              path={`cases.${cIdx}.facts`}
+                              text={c.facts || ''}
+                              {...annot}
+                              as="p"
+                              className="text-foreground/90 pl-3 border-l-2 border-border/80"
+                              emptyFallback="No facts provided."
+                            />
                           )}
                         </div>
 
@@ -641,9 +792,14 @@ export function NotesReviewEditor({
                               placeholder="Constitutional or legal question..."
                             />
                           ) : (
-                            <p className="font-medium text-foreground pl-3 border-l-2 border-primary/50 bg-primary/5 p-2 rounded-r-lg">
-                              {c.issue || 'No issue defined.'}
-                            </p>
+                            <NotesAnnotatedText
+                              path={`cases.${cIdx}.issue`}
+                              text={c.issue || ''}
+                              {...annot}
+                              as="p"
+                              className="font-medium text-foreground pl-3 border-l-2 border-primary/50 bg-primary/5 p-2 rounded-r-lg"
+                              emptyFallback="No issue defined."
+                            />
                           )}
                         </div>
 
@@ -662,9 +818,14 @@ export function NotesReviewEditor({
                               placeholder="Court holding, legal reasoning, and dispositive portion..."
                             />
                           ) : (
-                            <p className="text-foreground/95 pl-3 border-l-2 border-sticker-green/60 font-medium leading-relaxed">
-                              {c.ruling || 'No ruling extracted.'}
-                            </p>
+                            <NotesAnnotatedText
+                              path={`cases.${cIdx}.ruling`}
+                              text={c.ruling || ''}
+                              {...annot}
+                              as="p"
+                              className="text-foreground/95 pl-3 border-l-2 border-sticker-green/60 font-medium leading-relaxed"
+                              emptyFallback="No ruling extracted."
+                            />
                           )}
                         </div>
 
@@ -683,9 +844,12 @@ export function NotesReviewEditor({
                                 placeholder="Legal doctrine applied (e.g. Intergenerational Responsibility)"
                               />
                             ) : (
-                              <span className="px-2.5 py-1 rounded-lg bg-primary/10 text-primary font-semibold text-xs border border-primary/20">
-                                {c.doctrine_applied}
-                              </span>
+                              <NotesAnnotatedText
+                                path={`cases.${cIdx}.doctrine_applied`}
+                                text={c.doctrine_applied || ''}
+                                {...annot}
+                                className="px-2.5 py-1 rounded-lg bg-primary/10 text-primary font-semibold notes-meta border border-primary/20"
+                              />
                             )}
                           </div>
                         )}
@@ -719,7 +883,7 @@ export function NotesReviewEditor({
                   <Gavel className="w-4 h-4" />
                 </div>
                 <div>
-                  <h2 className="text-lg sm:text-xl font-extrabold text-foreground">
+                  <h2 className="notes-h2 font-extrabold text-foreground">
                     Legal Doctrines & Requisites
                   </h2>
                   <p className="text-xs text-muted-foreground">
@@ -768,8 +932,8 @@ export function NotesReviewEditor({
                           </div>
                         ) : (
                           <div>
-                            <h3 className="font-extrabold text-base text-foreground">
-                              {d.name}
+                            <h3 className="font-extrabold notes-h3 text-foreground">
+                              <NotesAnnotatedText path={`doctrines.${dIdx}.name`} text={d.name} {...annot} />
                             </h3>
                             {d.statutory_basis && (
                               <p className="text-xs font-mono text-primary font-semibold mt-0.5">
@@ -801,9 +965,13 @@ export function NotesReviewEditor({
                             placeholder="Statement of the doctrine..."
                           />
                         ) : (
-                          <blockquote className="text-xs sm:text-[13px] text-foreground/90 italic border-l-2 border-primary/50 pl-3 leading-relaxed">
-                            "{d.statement}"
-                          </blockquote>
+                          <NotesAnnotatedText
+                            path={`doctrines.${dIdx}.statement`}
+                            text={d.statement}
+                            {...annot}
+                            as="blockquote"
+                            className="text-foreground/90 italic border-l-2 border-primary/50 pl-3 leading-relaxed"
+                          />
                         )}
                       </div>
 
@@ -847,7 +1015,12 @@ export function NotesReviewEditor({
                                     </button>
                                   </div>
                                 ) : (
-                                  <span className="leading-snug">{elem}</span>
+                                  <NotesAnnotatedText
+                                    path={`doctrines.${dIdx}.elements.${eIdx}`}
+                                    text={elem}
+                                    {...annot}
+                                    className="leading-snug"
+                                  />
                                 )}
                               </div>
                             ))
@@ -897,7 +1070,11 @@ export function NotesReviewEditor({
                                     </button>
                                   </>
                                 ) : (
-                                  <span>{ex}</span>
+                                  <NotesAnnotatedText
+                                    path={`doctrines.${dIdx}.exceptions.${exIdx}`}
+                                    text={ex}
+                                    {...annot}
+                                  />
                                 )}
                               </div>
                             ))}
@@ -933,7 +1110,7 @@ export function NotesReviewEditor({
                   <BookOpen className="w-4 h-4" />
                 </div>
                 <div>
-                  <h2 className="text-lg sm:text-xl font-extrabold text-foreground">
+                  <h2 className="notes-h2 font-extrabold text-foreground">
                     {isLawReviewer ? 'Codal & Concept Outlines' : 'Study Notes & Sections'}
                   </h2>
                   <p className="text-xs text-muted-foreground">
@@ -975,9 +1152,9 @@ export function NotesReviewEditor({
                       </button>
                     </div>
                   ) : (
-                    <h3 className="text-lg sm:text-xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
+                    <h3 className="notes-h3 font-bold tracking-tight text-foreground flex items-center gap-2.5">
                       <span className="w-2 h-2 rounded-full bg-primary shrink-0" />
-                      <span>{section.heading}</span>
+                      <NotesAnnotatedText path={`sections.${sIdx}.heading`} text={section.heading} {...annot} />
                     </h3>
                   )}
                 </div>
@@ -1003,7 +1180,12 @@ export function NotesReviewEditor({
                           </button>
                         </div>
                       ) : (
-                        <span className="flex-1">{subpoint}</span>
+                        <NotesAnnotatedText
+                          path={`sections.${sIdx}.subpoints.${pIdx}`}
+                          text={subpoint}
+                          {...annot}
+                          className="flex-1 leading-relaxed text-foreground/90"
+                        />
                       )}
                     </div>
                   ))}
@@ -1058,8 +1240,18 @@ export function NotesReviewEditor({
                             </div>
                           ) : (
                             <>
-                              <div className="font-bold text-xs sm:text-sm text-primary tracking-wide">{kt.term}</div>
-                              <div className="text-xs sm:text-[13px] text-foreground/80 leading-normal">{kt.definition}</div>
+                              <NotesAnnotatedText
+                                path={`sections.${sIdx}.key_terms.${tIdx}.term`}
+                                text={kt.term}
+                                {...annot}
+                                className="font-bold notes-meta text-primary tracking-wide"
+                              />
+                              <NotesAnnotatedText
+                                path={`sections.${sIdx}.key_terms.${tIdx}.definition`}
+                                text={kt.definition}
+                                {...annot}
+                                className="text-foreground/80 leading-normal"
+                              />
                             </>
                           )}
                         </div>
@@ -1101,6 +1293,7 @@ export function NotesReviewEditor({
             </button>
           </div>
         )}
+      </div>
       </div>
     </div>
   );

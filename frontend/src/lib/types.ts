@@ -87,6 +87,26 @@ export interface NoteSection {
   key_terms: KeyTerm[];
 }
 
+export type NotesHighlightMode = 'off' | 'auto' | 'manual';
+export type NotesMarkKind = 'highlight' | 'bold' | 'italic' | 'underline';
+export type NotesHighlightColor = 'yellow' | 'green' | 'pink' | 'sky';
+
+export interface NoteMark {
+  id: string;
+  path: string;
+  start: number;
+  end: number;
+  text: string;
+  kind: NotesMarkKind;
+  color?: NotesHighlightColor;
+  source?: 'auto' | 'manual';
+}
+
+export interface NotePresentation {
+  highlight_mode?: NotesHighlightMode;
+  marks?: NoteMark[];
+}
+
 export interface NoteContent {
   title: string;
   summary: string;
@@ -94,6 +114,7 @@ export interface NoteContent {
   sections: NoteSection[];
   cases?: LegalCase[];
   doctrines?: LegalDoctrine[];
+  presentation?: NotePresentation;
 }
 
 export interface Notes {

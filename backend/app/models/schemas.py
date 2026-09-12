@@ -157,6 +157,23 @@ class NoteSection(BaseModel):
     subpoints: List[str] = Field(default_factory=list)
     key_terms: List[KeyTerm] = Field(default_factory=list)
 
+
+class NoteMark(BaseModel):
+    id: str
+    path: str
+    start: int = 0
+    end: int = 0
+    text: str = ""
+    kind: Literal["highlight", "bold", "italic", "underline"] = "highlight"
+    color: Optional[str] = None
+    source: Optional[str] = None
+
+
+class NotePresentation(BaseModel):
+    highlight_mode: Literal["off", "auto", "manual"] = "off"
+    marks: List[NoteMark] = Field(default_factory=list)
+
+
 class NoteContent(BaseModel):
     title: str = "Extracted Notes"
     summary: str = ""
@@ -164,6 +181,7 @@ class NoteContent(BaseModel):
     sections: List[NoteSection] = Field(default_factory=list)
     cases: List[LegalCase] = Field(default_factory=list)
     doctrines: List[LegalDoctrine] = Field(default_factory=list)
+    presentation: Optional[NotePresentation] = None
 
 class NotesUpdate(BaseModel):
     content: NoteContent
