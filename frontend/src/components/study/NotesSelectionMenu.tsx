@@ -169,12 +169,12 @@ export function NotesHighlightHint({
       <Highlighter className="w-3 h-3 text-focus-gold" />
       {mode === 'auto'
         ? autoLoading
-          ? 'Asking Gemini to highlight study-worthy phrases that appear in these notes…'
-            : autoError
+          ? 'Finding study-worthy phrases in these notes…'
+          : autoError
             ? 'Auto-highlight could not run. Click Auto again to retry, or use Manual.'
             : autoTermCount > 0
-              ? `Gemini highlighted ${autoTermCount} phrase${autoTermCount === 1 ? '' : 's'} found in these notes.`
-              : 'No grounded phrases to highlight. Use Manual to paint your own.'
+              ? `Highlighted ${autoTermCount} phrase${autoTermCount === 1 ? '' : 's'} found in these notes.`
+              : 'No study phrases to highlight yet. Use Manual to paint your own.'
         : 'Select text in the document, then pick a highlighter color.'}
     </p>
   );

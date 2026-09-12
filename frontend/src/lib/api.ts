@@ -121,24 +121,29 @@ class ApiClient {
 
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {},
+    options: RequestInit & { timeoutMs?: number } = {},
     retriesLeft = 1,
     isAuthRetry = false
   ): Promise<T> {
+    const timeoutMs =
+      typeof (options as RequestInit & { timeoutMs?: number }).timeoutMs === 'number'
+        ? (options as RequestInit & { timeoutMs?: number }).timeoutMs
+        : 90000;
+    const { timeoutMs: _ignoredTimeout, ...fetchOptions } = options as RequestInit & { timeoutMs?: number };
     const url = `${API_BASE}${endpoint}`;
     const headers = {
-      ...this.getHeaders(options.body instanceof FormData ? null : 'application/json'),
-      ...options.headers
+      ...this.getHeaders(fetchOptions.body instanceof FormData ? null : 'application/json'),
+      ...fetchOptions.headers
     };
 
     const controller = new AbortController();
-    const timeoutTimer = setTimeout(() => controller.abort(), 90000);
-    const signal = options.signal || controller.signal;
+    const timeoutTimer = setTimeout(() => controller.abort(), timeoutMs);
+    const signal = fetchOptions.signal || controller.signal;
 
     let res: Response;
     try {
       res = await fetch(url, {
-        ...options,
+        ...fetchOptions,
         headers,
         signal
       });
@@ -547,11 +552,21 @@ class ApiClient {
     });
   }
 
+  private highlightInflight = new Map<string, Promise<NoteMark[]>>();
+
   async generateNoteHighlights(sessionId: string): Promise<NoteMark[]> {
-    const result = await this.request<{ highlights: NoteMark[] }>(`/sessions/${sessionId}/notes/highlights`, {
-      method: 'POST'
+    const existing = this.highlightInflight.get(sessionId);
+    if (existing) return existing;
+
+    const pending = this.request<{ highlights: NoteMark[] }>(`/sessions/${sessionId}/notes/highlights`, {
+      method: 'POST',
+      timeoutMs: 180000
+    }).then((result) => result.highlights || []).finally(() => {
+      this.highlightInflight.delete(sessionId);
     });
-    return result.highlights || [];
+
+    this.highlightInflight.set(sessionId, pending);
+    return pending;
   }
 
   // ---------------------------------------------------------------------------

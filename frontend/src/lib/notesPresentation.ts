@@ -59,6 +59,16 @@ export function emptyPresentation(): NotePresentation {
   return { highlight_mode: 'off', marks: [] };
 }
 
+export function notesBodyFingerprint(content: Pick<NoteContent, 'title' | 'summary' | 'sections' | 'cases' | 'doctrines'>): string {
+  return JSON.stringify({
+    title: content.title,
+    summary: content.summary,
+    sections: content.sections,
+    cases: content.cases,
+    doctrines: content.doctrines
+  });
+}
+
 export function normalizeNoteContent(raw?: NoteContent | null): NoteContent {
   return {
     title: raw?.title || 'Extracted Study Notes',

@@ -54,7 +54,7 @@ async def generate_notes(
         if stream:
             async def progress_generator():
                 yield f"data: {json.dumps({'step': 'extracting', 'progress': 25, 'message': 'Extracting document structure...'})}\n\n"
-                yield f"data: {json.dumps({'step': 'analyzing', 'progress': 50, 'message': 'Gemini analyzing key concepts and terms...'})}\n\n"
+                yield f"data: {json.dumps({'step': 'analyzing', 'progress': 50, 'message': 'Analyzing key concepts and terms...'})}\n\n"
                 yield f"data: {json.dumps({'step': 'structuring', 'progress': 75, 'message': 'Synthesizing structured notes & definitions...'})}\n\n"
 
                 raw_notes = await gemini_service.generate_notes(source_text, doc_title)

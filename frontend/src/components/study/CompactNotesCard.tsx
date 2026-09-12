@@ -32,7 +32,7 @@ export function CompactNotesCard({
   const hasNotes = sections.length > 0 || cases.length > 0 || doctrines.length > 0 || Boolean(content?.summary);
 
   const statusSubtitle = generating
-    ? 'Gemini is synthesizing your notes…'
+    ? 'Synthesizing your notes…'
     : hasNotes
       ? isLaw
         ? `${cases.length} Case Briefs • ${doctrines.length} Doctrines • ${sections.length} Sections`

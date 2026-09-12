@@ -17,6 +17,7 @@ import { DashboardSummary, Document, Exam, Session } from '@/lib/types';
 import { api } from '@/lib/api';
 import { examColor, formatCountdown, formatExamDate } from '@/lib/examColors';
 import { useAuth } from '@/context/AuthContext';
+import { usePomodoro } from '@/context/PomodoroContext';
 import { LandingPage } from '@/components/landing/LandingPage';
 
 function StatColumn({ label, value }: { label: string; value: string }) {
@@ -28,7 +29,12 @@ function StatColumn({ label, value }: { label: string; value: string }) {
   );
 }
 
+function isResumableSession(session: Session): boolean {
+  return session.status !== 'completed' && !session.ended_at;
+}
+
 function DashboardPage() {
+  const { currentSessionId, linkSession } = usePomodoro();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
@@ -61,6 +67,22 @@ function DashboardPage() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    const onSessionEnded = () => {
+      void load();
+    };
+    window.addEventListener('aral:session-ended', onSessionEnded);
+    return () => window.removeEventListener('aral:session-ended', onSessionEnded);
+  }, [load]);
+
+  useEffect(() => {
+    if (!currentSessionId || sessions.length === 0) return;
+    const linked = sessions.find((session) => session.id === currentSessionId);
+    if (linked && !isResumableSession(linked)) {
+      linkSession(null);
+    }
+  }, [currentSessionId, sessions, linkSession]);
+
   if (loading) {
     return (
       <div className="py-24 flex flex-col items-center justify-center gap-3">
@@ -90,7 +112,15 @@ function DashboardPage() {
 
   const upcomingExams = exams.filter((e) => e.days_remaining >= 0);
   const nearestExam = summary.nearest_exam;
-  const latestSession = sessions[0] ?? null;
+  const linkedSession = currentSessionId
+    ? sessions.find((session) => session.id === currentSessionId)
+    : undefined;
+  const canResume = Boolean(
+    currentSessionId && (!linkedSession || isResumableSession(linkedSession))
+  );
+  const recentSessions = sessions
+    .filter((session) => !(canResume && session.id === currentSessionId))
+    .slice(0, 4);
 
   // A brand-new account gets the full pitch; returning users get a slim strip.
   if (!summary.has_data) {
@@ -180,9 +210,9 @@ function DashboardPage() {
           </p>
         </div>
 
-        {latestSession && (
+        {canResume && currentSessionId && (
           <Link
-            href={`/session/${latestSession.id}/`}
+            href={`/session/${currentSessionId}/`}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-border bg-surface-container-low text-sm font-semibold text-foreground hover:bg-surface-container transition-colors shrink-0"
           >
             <span>Resume session</span>
@@ -297,7 +327,7 @@ function DashboardPage() {
         />
       </section>
 
-      {sessions.slice(1).length > 0 && (
+      {recentSessions.length > 0 && (
         <section className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-bold text-foreground">Recent sessions</h2>
@@ -306,7 +336,7 @@ function DashboardPage() {
               <ChevronRight className="w-3.5 h-3.5" />
             </Link>
           </div>
-          {sessions.slice(1, 5).map((session) => (
+          {recentSessions.map((session) => (
             <Link
               key={session.id}
               href={`/session/${session.id}/`}
@@ -333,22 +363,19 @@ function DashboardPage() {
 export default function Page() {
   const { user, loading } = useAuth();
 
-  // If logged in, render the authenticated Study Dashboard
-  if (user) {
-    return <DashboardPage />;
-  }
-
-  // If user is hydrating and we have a cached auth token, show study dashboard loader
-  if (loading && typeof window !== 'undefined' && localStorage.getItem('aral_auth_token')) {
+  if (loading) {
     return (
       <div className="py-24 flex flex-col items-center justify-center gap-3">
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
-        <p className="text-sm font-semibold text-muted-foreground">Loading your study dashboard…</p>
+        <p className="text-sm font-semibold text-muted-foreground">Loading…</p>
       </div>
     );
   }
 
-  // In all other cases (SSR, guest visitor, or logged-out), render the Landing Homepage!
+  if (user) {
+    return <DashboardPage />;
+  }
+
   return <LandingPage />;
 }
 

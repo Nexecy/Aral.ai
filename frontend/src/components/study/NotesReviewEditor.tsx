@@ -43,6 +43,7 @@ import {
   isNotesHighlightMode,
   makeMark,
   normalizeNoteContent,
+  notesBodyFingerprint,
   upsertMark
 } from '@/lib/notesPresentation';
 
@@ -98,22 +99,24 @@ export function NotesReviewEditor({
   const autoMarks = marks.filter((mark) => mark.kind === 'highlight' && mark.source === 'auto');
   const formattingEnabled = !isEditing;
   const { selection, clearSelection } = useNotesFieldSelection(documentRef, formattingEnabled);
-  const notesFingerprint = useMemo(
-    () =>
-      JSON.stringify({
-        title: content.title,
-        summary: content.summary,
-        sections: content.sections,
-        cases: content.cases,
-        doctrines: content.doctrines
-      }),
-    [content.title, content.summary, content.sections, content.cases, content.doctrines]
-  );
+  const notesFingerprint = useMemo(() => notesBodyFingerprint(content), [
+    content.title,
+    content.summary,
+    content.sections,
+    content.cases,
+    content.doctrines
+  ]);
 
   useEffect(() => {
-    if (initialNotes?.content) {
-      setContent(normalizeNoteContent(initialNotes.content));
-    }
+    if (!initialNotes?.content) return;
+    const incoming = normalizeNoteContent(initialNotes.content);
+    setContent((prev) => {
+      if (notesBodyFingerprint(prev) !== notesBodyFingerprint(incoming)) return incoming;
+      const prevMarks = prev.presentation?.marks || [];
+      const nextMarks = incoming.presentation?.marks || [];
+      if (prevMarks.length > nextMarks.length) return prev;
+      return incoming;
+    });
   }, [initialNotes]);
 
   useEffect(() => {
@@ -151,9 +154,13 @@ export function NotesReviewEditor({
     });
   }, [persistNotes, storedHighlightMode]);
 
+  const patchPresentationRef = useRef(patchPresentation);
+  patchPresentationRef.current = patchPresentation;
+
   const handleHighlightModeChange = (mode: NotesHighlightMode) => {
-    if (mode === 'auto' && autoError) {
+    if (mode === 'auto' && (autoError || autoMarks.length === 0)) {
       autoKeyRef.current = null;
+      setAutoError(null);
       setAutoRequestId((n) => n + 1);
     }
     setStoredHighlightMode(mode);
@@ -465,11 +472,12 @@ export function NotesReviewEditor({
 
   useEffect(() => {
     if (highlightMode !== 'auto' || isEditing || generating) return;
-    if (autoKeyRef.current === notesFingerprint) return;
     if (autoMarks.length > 0) {
       autoKeyRef.current = notesFingerprint;
+      setAutoError(null);
       return;
     }
+    if (autoKeyRef.current === notesFingerprint) return;
 
     let cancelled = false;
     setAutoLoading(true);
@@ -486,13 +494,12 @@ export function NotesReviewEditor({
           kind: 'highlight',
           source: 'auto'
         }));
-        patchPresentation((current) => ({
+        patchPresentationRef.current((current) => ({
           marks: [...current.filter((mark) => mark.source !== 'auto'), ...incoming]
         }));
       })
       .catch((err: { message?: string }) => {
         if (cancelled) return;
-        autoKeyRef.current = notesFingerprint;
         setAutoError(err?.message || 'Could not generate auto-highlights.');
       })
       .finally(() => {
@@ -502,7 +509,7 @@ export function NotesReviewEditor({
     return () => {
       cancelled = true;
     };
-  }, [highlightMode, isEditing, generating, notesFingerprint, sessionId, patchPresentation, autoRequestId]);
+  }, [highlightMode, isEditing, generating, notesFingerprint, sessionId, autoRequestId, autoMarks.length]);
 
   const annot = {
     marks,
