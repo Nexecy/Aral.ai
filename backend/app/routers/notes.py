@@ -2,12 +2,14 @@ import json
 import asyncio
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 from app.core.auth import get_current_user, require_verified_email
 from app.core.ownership import require_session_owner
 from app.services.db_service import db_service
 from app.services.gemini_service import gemini_service
-from app.models.schemas import NotesResponse, NotesUpdate, NoteContent
+from app.models.schemas import NotesResponse, NotesUpdate, NoteMark
+from pydantic import BaseModel
+
 
 router = APIRouter(prefix="/sessions/{session_id}/notes", tags=["notes"])
 
@@ -100,3 +102,48 @@ async def update_notes(
         scope=payload.scope or "custom edit"
     )
     return saved
+
+
+class NotesHighlightResponse(BaseModel):
+    highlights: list[NoteMark]
+
+
+@router.post("/highlights", response_model=NotesHighlightResponse)
+async def generate_note_highlights(
+    session_id: str,
+    user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Grounded auto-highlights: Gemini proposes phrases, then we keep only
+    verbatim matches from the saved notes.
+    """
+    await require_session_owner(session_id, user["id"])
+    notes = await db_service.get_notes(session_id)
+    if not notes or not notes.get("content"):
+        raise HTTPException(status_code=404, detail="Notes not yet generated for this session")
+
+    highlights = await gemini_service.generate_note_highlights(notes["content"])
+    marked = []
+    for idx, item in enumerate(highlights):
+        marked.append({
+            **item,
+            "id": item.get("id") or f"auto_{idx}",
+            "kind": item.get("kind") or "highlight",
+            "source": "auto",
+        })
+
+    content = notes["content"] if isinstance(notes["content"], dict) else {}
+    next_content = dict(content)
+    presentation = dict(next_content.get("presentation") or {})
+    kept = [
+        mark for mark in (presentation.get("marks") or [])
+        if isinstance(mark, dict) and mark.get("source") != "auto"
+    ]
+    presentation["marks"] = kept + marked
+    next_content["presentation"] = presentation
+    await db_service.upsert_notes(
+        session_id=session_id,
+        content=next_content,
+        scope=notes.get("scope") or "auto highlights",
+    )
+    return {"highlights": marked}

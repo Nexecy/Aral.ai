@@ -5,6 +5,7 @@ import random
 from typing import Dict, Any, List, AsyncGenerator, Optional, Tuple
 from app.core.config import settings
 from app.models.schemas import NoteContent, QuizQuestion
+from app.services.notes_terms import sanitize_note_key_terms
 
 # Try to import Google GenAI / generativeai
 try:
@@ -403,7 +404,7 @@ Extract the following:
 3. "sections": 3 to 8 structured sections covering all key legal concepts, statutory provisions, and principles:
    - "heading": Clear section title
    - "subpoints": 2 to 6 high-yield bullet points explaining legal mechanics and application
-   - "key_terms": 1 to 4 key legal terms, maxims, or Latin phrases with definitions
+   - "key_terms": 1 to 4 key legal terms, maxims, or Latin phrases with definitions. Never use a sentence prefix or caption as a term.
 
 Return JSON matching this schema:
 {{
@@ -479,6 +480,7 @@ Requirements:
 1. Extract 3 to 8 high-yield sections covering all main topics in the material.
 2. Every section must have 2 to 6 informative subpoints and 1 to 4 key terms with clear definitions.
 3. Base everything strictly on the provided source content. Return valid JSON only with no preamble.
+4. Key terms must be real glossary vocabulary (named concepts, technical terms, maxims). Never use the first words of a sentence or a caption like "Illustrated by..." as a term.
 
 Source Material:
 {text[:28000]}
@@ -493,10 +495,58 @@ Source Material:
                 parsed["doctrines"] = []
             if not parsed.get("document_type"):
                 parsed["document_type"] = "law" if (parsed["cases"] or parsed["doctrines"] or is_legal) else "general"
-            return parsed
+            return sanitize_note_key_terms(parsed)
 
         # Dynamic fallback parser extracting real concepts from PDF text
         return self._fallback_notes(document_title, text)
+
+    async def generate_note_highlights(self, content: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        Ask Gemini which phrases in the reviewer are worth highlighting, then
+        keep only those that appear verbatim in the notes.
+        """
+        from app.services.notes_terms import flatten_note_fields, ground_highlights
+
+        fields = flatten_note_fields(content)
+        if not fields:
+            return []
+
+        catalog_lines = []
+        for path, text in fields.items():
+            clipped = text if len(text) <= 420 else text[:417] + "..."
+            catalog_lines.append(f"{path}: {clipped}")
+        catalog = "\n".join(catalog_lines)[:14000]
+
+        prompt = f"""You are a study highlighter. Choose phrases a student should remember from these notes.
+
+Rules:
+- Copy each phrase EXACTLY from the field text. Do not paraphrase or invent.
+- Prefer names, distinctive vocabulary, mechanisms, and short memorable lines.
+- Do not highlight whole sentences unless they are a short maxim (under 8 words).
+- Do not invent legal doctrines, case names, or facts that are not in the notes.
+- Return 8 to 24 highlights.
+
+Return JSON only:
+{{
+  "highlights": [
+    {{ "path": "sections.0.subpoints.1", "text": "exact substring from that field", "color": "yellow" }}
+  ]
+}}
+
+Allowed colors: yellow, green, pink, sky.
+
+Notes fields:
+{catalog}
+"""
+        parsed = await self._try_generate_json(prompt)
+        proposals: List[Any] = []
+        if isinstance(parsed, dict):
+            raw = parsed.get("highlights") or parsed.get("marks") or []
+            if isinstance(raw, list):
+                proposals = raw
+        elif isinstance(parsed, list):
+            proposals = parsed
+        return ground_highlights(content, proposals)
 
     async def generate_flashcards(self, notes_json: Dict[str, Any], count: int = 8) -> List[Dict[str, Any]]:
         """
@@ -830,19 +880,9 @@ If the student asks to change or add notes, you may include a [NOTE_UPDATE] JSON
                 }
             ]
 
-        # Ensure every section has at least 1 key term
-        for i, s in enumerate(sections_data):
-            if not s["key_terms"]:
-                first_bullet = s["subpoints"][0] if s["subpoints"] else clean_title
-                # Pick first 2-3 words as term
-                words = first_bullet.split()
-                term_name = " ".join(words[:3]).strip(",:;.")
-                if not term_name:
-                    term_name = f"Concept {i + 1}"
-                s["key_terms"].append({
-                    "term": term_name,
-                    "definition": first_bullet
-                })
+        # Keep only glossary-style terms. Never invent a "term" from the first
+        # words of a bullet — that hallucinates study vocabulary and poisons auto-highlight.
+        sanitize_note_key_terms({"sections": sections_data})
 
         # Synthesize summary from first section
         first_subpoints = sections_data[0]["subpoints"]

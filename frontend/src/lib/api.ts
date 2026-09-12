@@ -5,6 +5,7 @@ import {
   SessionEndPayload,
   SessionStatus,
   Notes,
+  NoteMark,
   Flashcard,
   QuizAttempt,
   ChatMessage,
@@ -539,10 +540,18 @@ class ApiClient {
   }
 
   async updateNotes(sessionId: string, content: NoteContent, scope = 'custom edit'): Promise<Notes> {
+    this.invalidateCache('/sessions');
     return this.request<Notes>(`/sessions/${sessionId}/notes`, {
       method: 'PUT',
       body: JSON.stringify({ content, scope })
     });
+  }
+
+  async generateNoteHighlights(sessionId: string): Promise<NoteMark[]> {
+    const result = await this.request<{ highlights: NoteMark[] }>(`/sessions/${sessionId}/notes/highlights`, {
+      method: 'POST'
+    });
+    return result.highlights || [];
   }
 
   // ---------------------------------------------------------------------------

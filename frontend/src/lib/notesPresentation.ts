@@ -30,9 +30,18 @@ export interface TextSpan {
   underline?: boolean;
 }
 
-const SKIP_AUTO_PATH = /(^title$|\.heading$|\.term$|\.case_name$|\.name$)/;
+const SKIP_AUTO_PATH = /(^title$|\.heading$|\.term$|\.definition$|\.case_name$|\.name$)/;
 const MIN_AUTO_PHRASE = 3;
-const MAX_AUTO_PHRASE = 80;
+const MAX_AUTO_PHRASE = 60;
+
+const TRAILING_STOP = new Set([
+  'a', 'an', 'the', 'of', 'off', 'to', 'for', 'and', 'or', 'but', 'with', 'from', 'by',
+  'as', 'is', 'are', 'was', 'were', 'be', 'been', 'more', 'than', 'that', 'this',
+  'these', 'those', 'their', 'his', 'her', 'its', 'on', 'in', 'at', 'into', 'onto', 'upon'
+]);
+
+const LEADING_NOISE =
+  /^(once upon|along the way|illustrated by|written by|adapted by|translated by|published by|copyright|when they|if i|so the|then the|after that|in the|on the|at the|there were)\b/i;
 
 export const HIGHLIGHT_COLORS: { id: NotesHighlightColor; label: string }[] = [
   { id: 'yellow', label: 'Yellow' },
@@ -77,6 +86,61 @@ export function shouldAutoHighlightPath(path: string): boolean {
   return !SKIP_AUTO_PATH.test(path);
 }
 
+function bareWord(word: string): string {
+  return word.replace(/[^A-Za-z0-9]+/g, '').toLowerCase();
+}
+
+/**
+ * Auto-highlight only paints glossary-quality vocabulary: defined concepts,
+ * case captions, and doctrines. Sentence prefixes and captions are rejected
+ * so the highlighter cannot invent study terms from story prose.
+ */
+export function isCredibleGlossaryTerm(phrase: string, definition = ''): boolean {
+  const cleaned = phrase.trim().replace(/\s+/g, ' ');
+  if (cleaned.length < MIN_AUTO_PHRASE || cleaned.length > MAX_AUTO_PHRASE) return false;
+
+  const quoteCount = (cleaned.match(/["“”]/g) || []).length;
+  if (quoteCount % 2 === 1) return false;
+
+  const words = cleaned.split(' ').filter(Boolean);
+  if (words.length === 0) return false;
+
+  const last = bareWord(words[words.length - 1]);
+  if (TRAILING_STOP.has(last)) return false;
+  if (LEADING_NOISE.test(cleaned)) return false;
+
+  const definitionText = definition.trim().replace(/\s+/g, ' ');
+  if (definitionText) {
+    const termL = cleaned.toLowerCase();
+    const defL = definitionText.toLowerCase();
+    if (defL === termL) return false;
+    if (defL.startsWith(termL) && defL.length > termL.length + 2) return false;
+  }
+
+  if (/\bv\.?\s+[A-Z]/.test(cleaned)) return true;
+  if (/\b(doctrine|maxim|principle|theorem|lemma|law of|theory of)\b/i.test(cleaned)) return true;
+
+  if (words.length === 1) {
+    const token = words[0];
+    if (/^[A-Z]{2,8}$/.test(token)) return true;
+    if (/^[A-Z][A-Za-z-]{3,}$/.test(token)) return true;
+    if (token.length >= 8 && /[A-Za-z]{6,}/.test(token)) return true;
+    return false;
+  }
+
+  const alphaWords = words.filter((word) => /[A-Za-z]/.test(word));
+  const contentWords = alphaWords.filter((word) => !TRAILING_STOP.has(bareWord(word)));
+  if (contentWords.length < 2) return false;
+
+  if (/^[A-Z][a-z]+(?:\s+[a-z]+){1,6}$/.test(cleaned)) return false;
+
+  return alphaWords.every((word) => {
+    const bare = word.replace(/^[“"']/, '');
+    if (TRAILING_STOP.has(bareWord(bare))) return true;
+    return Boolean(bare && /^[A-Z]/.test(bare));
+  });
+}
+
 function isWordChar(ch: string | undefined): boolean {
   if (!ch) return false;
   return /[A-Za-z0-9]/.test(ch);
@@ -108,9 +172,9 @@ export function collectAutoTerms(content: NoteContent): AutoTerm[] {
   const seen = new Set<string>();
   const terms: AutoTerm[] = [];
 
-  const push = (phrase: string, color: NotesHighlightColor, reason: AutoTerm['reason']) => {
+  const push = (phrase: string, color: NotesHighlightColor, reason: AutoTerm['reason'], definition = '') => {
     const cleaned = phrase.trim().replace(/\s+/g, ' ');
-    if (cleaned.length < MIN_AUTO_PHRASE || cleaned.length > MAX_AUTO_PHRASE) return;
+    if (!isCredibleGlossaryTerm(cleaned, definition)) return;
     const key = cleaned.toLowerCase();
     if (seen.has(key)) return;
     seen.add(key);
@@ -118,7 +182,7 @@ export function collectAutoTerms(content: NoteContent): AutoTerm[] {
   };
 
   for (const section of content.sections || []) {
-    for (const kt of section.key_terms || []) push(kt.term, 'yellow', 'key_term');
+    for (const kt of section.key_terms || []) push(kt.term, 'yellow', 'key_term', kt.definition);
   }
   for (const doctrine of content.doctrines || []) push(doctrine.name, 'green', 'doctrine');
   for (const legalCase of content.cases || []) push(legalCase.case_name, 'sky', 'case');

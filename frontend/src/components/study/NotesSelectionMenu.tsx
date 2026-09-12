@@ -152,13 +152,29 @@ function FormatButton({
   );
 }
 
-export function NotesHighlightHint({ mode }: { mode: NotesHighlightMode }) {
+export function NotesHighlightHint({
+  mode,
+  autoTermCount = 0,
+  autoLoading = false,
+  autoError = null
+}: {
+  mode: NotesHighlightMode;
+  autoTermCount?: number;
+  autoLoading?: boolean;
+  autoError?: string | null;
+}) {
   if (mode === 'off') return null;
   return (
     <p className="flex items-center gap-1.5 text-[11px] text-on-surface-variant">
       <Highlighter className="w-3 h-3 text-focus-gold" />
       {mode === 'auto'
-        ? 'Key terms, doctrines, and case names are highlighted automatically.'
+        ? autoLoading
+          ? 'Asking Gemini to highlight study-worthy phrases that appear in these notes…'
+            : autoError
+            ? 'Auto-highlight could not run. Click Auto again to retry, or use Manual.'
+            : autoTermCount > 0
+              ? `Gemini highlighted ${autoTermCount} phrase${autoTermCount === 1 ? '' : 's'} found in these notes.`
+              : 'No grounded phrases to highlight. Use Manual to paint your own.'
         : 'Select text in the document, then pick a highlighter color.'}
     </p>
   );

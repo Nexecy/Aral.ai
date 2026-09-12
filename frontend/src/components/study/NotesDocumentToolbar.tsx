@@ -1,12 +1,15 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Bold, Check, Highlighter, Italic, Type, Underline } from 'lucide-react';
+import { Bold, Check, Highlighter, Italic, Loader2, Type, Underline } from 'lucide-react';
 import { NotesHighlightHint } from '@/components/study/NotesSelectionMenu';
 import {
+  NOTES_CUSTOM_PX_MAX,
+  NOTES_CUSTOM_PX_MIN,
   NOTES_FONT_SIZE_ORDER,
   NOTES_FONT_SIZES,
-  NotesFontSize
+  NotesFontSize,
+  getNotesTypeScale
 } from '@/lib/notesPreferences';
 import { HIGHLIGHT_COLORS } from '@/lib/notesPresentation';
 import { NotesHighlightColor, NotesHighlightMode } from '@/lib/types';
@@ -19,9 +22,14 @@ interface NotesDocumentToolbarProps {
   onColorChange: (color: NotesHighlightColor) => void;
   fontSize: NotesFontSize;
   onFontSizeChange: (size: NotesFontSize) => void;
+  customPx: number;
+  onCustomPxChange: (px: number) => void;
   formattingEnabled: boolean;
   onFormat: (kind: 'bold' | 'italic' | 'underline') => void;
   activeFormats?: { bold?: boolean; italic?: boolean; underline?: boolean };
+  autoTermCount?: number;
+  autoLoading?: boolean;
+  autoError?: string | null;
 }
 
 const HIGHLIGHT_MODES: { id: NotesHighlightMode; label: string }[] = [
@@ -37,9 +45,14 @@ export function NotesDocumentToolbar({
   onColorChange,
   fontSize,
   onFontSizeChange,
+  customPx,
+  onCustomPxChange,
   formattingEnabled,
   onFormat,
-  activeFormats
+  activeFormats,
+  autoTermCount = 0,
+  autoLoading = false,
+  autoError = null
 }: NotesDocumentToolbarProps) {
   return (
     <div className="rounded-2xl bg-card border border-border shadow-notebook-subtle px-3 py-2.5 sm:px-4 space-y-2 sticky top-2 z-20">
@@ -89,20 +102,23 @@ export function NotesDocumentToolbar({
           >
             {HIGHLIGHT_MODES.map((mode) => {
               const active = highlightMode === mode.id;
+              const busy = mode.id === 'auto' && autoLoading;
               return (
                 <button
                   key={mode.id}
                   type="button"
                   role="radio"
                   aria-checked={active}
+                  aria-busy={busy || undefined}
                   onClick={() => onHighlightModeChange(mode.id)}
                   className={cn(
-                    'px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors',
+                    'px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors inline-flex items-center gap-1',
                     active
                       ? 'bg-card text-primary shadow-sm'
                       : 'text-on-surface-variant hover:text-on-surface'
                   )}
                 >
+                  {busy && <Loader2 className="w-3 h-3 animate-spin" />}
                   {mode.label}
                 </button>
               );
@@ -132,11 +148,21 @@ export function NotesDocumentToolbar({
         )}
 
         <div className="ml-auto">
-          <NotesFontSizeMenu value={fontSize} onChange={onFontSizeChange} />
+          <NotesFontSizeMenu
+            value={fontSize}
+            customPx={customPx}
+            onChange={onFontSizeChange}
+            onCustomPxChange={onCustomPxChange}
+          />
         </div>
       </div>
 
-      <NotesHighlightHint mode={highlightMode} />
+      <NotesHighlightHint
+        mode={highlightMode}
+        autoTermCount={autoTermCount}
+        autoLoading={autoLoading}
+        autoError={autoError}
+      />
       {!formattingEnabled && (
         <p className="text-[11px] text-on-surface-variant">
           Exit Edit Notes to highlight and format the document like a study sheet.
@@ -182,13 +208,19 @@ function ToolbarIcon({
 
 function NotesFontSizeMenu({
   value,
-  onChange
+  customPx,
+  onChange,
+  onCustomPxChange
 }: {
   value: NotesFontSize;
+  customPx: number;
   onChange: (size: NotesFontSize) => void;
+  onCustomPxChange: (px: number) => void;
 }) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const scale = getNotesTypeScale(value, customPx);
+  const customActive = value === 'custom';
 
   useEffect(() => {
     if (!open) return;
@@ -216,7 +248,7 @@ function NotesFontSizeMenu({
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={`Document text size: ${NOTES_FONT_SIZES[value].label}`}
+        aria-label={`Document text size: ${scale.label}${customActive ? ` ${scale.body}px` : ''}`}
         title="Document text size"
         className={cn(
           'flex items-center gap-1 px-2 py-1.5 rounded-lg transition-colors',
@@ -226,20 +258,22 @@ function NotesFontSizeMenu({
         )}
       >
         <Type className="w-4 h-4" />
-        <span className="text-[10px] font-bold leading-none">{NOTES_FONT_SIZES[value].shortLabel}</span>
+        <span className="text-[10px] font-bold leading-none">
+          {customActive ? `${scale.body}` : NOTES_FONT_SIZES[value].shortLabel}
+        </span>
       </button>
 
       {open && (
         <div
           role="menu"
           aria-label="Document text size"
-          className="absolute right-0 top-full mt-1.5 z-50 w-44 p-1.5 rounded-xl bg-popover border border-outline-variant shadow-notion-elevated animate-in fade-in zoom-in-95 duration-100"
+          className="absolute right-0 top-full mt-1.5 z-50 w-52 p-1.5 rounded-xl bg-popover border border-outline-variant shadow-notion-elevated animate-in fade-in zoom-in-95 duration-100"
         >
           <p className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
             Text size
           </p>
           {NOTES_FONT_SIZE_ORDER.map((size) => {
-            const scale = NOTES_FONT_SIZES[size];
+            const preset = NOTES_FONT_SIZES[size];
             const active = size === value;
             return (
               <button
@@ -257,14 +291,61 @@ function NotesFontSizeMenu({
                     : 'text-on-surface hover:bg-surface-container'
                 )}
               >
-                <span style={{ fontSize: Math.min(scale.body, 16) }}>{scale.label}</span>
+                <span style={{ fontSize: Math.min(preset.body, 16) }}>{preset.label}</span>
                 <span className="flex items-center gap-1.5 shrink-0">
-                  <span className="text-[10px] font-mono text-on-surface-variant">{scale.body}px</span>
+                  <span className="text-[10px] font-mono text-on-surface-variant">{preset.body}px</span>
                   {active && <Check className="w-3.5 h-3.5" />}
                 </span>
               </button>
             );
           })}
+
+          <div className="mt-1 pt-1.5 border-t border-outline-variant px-2.5 pb-1.5 space-y-1.5">
+            <button
+              type="button"
+              role="menuitemradio"
+              aria-checked={customActive}
+              onClick={() => onChange('custom')}
+              className={cn(
+                'w-full flex items-center justify-between gap-2 py-1 rounded-lg transition-colors',
+                customActive ? 'text-primary font-bold' : 'text-on-surface'
+              )}
+            >
+              <span>Custom</span>
+              {customActive && <Check className="w-3.5 h-3.5" />}
+            </button>
+            <label className="flex items-center gap-2">
+              <span className="sr-only">Custom font size in pixels</span>
+              <input
+                type="range"
+                min={NOTES_CUSTOM_PX_MIN}
+                max={NOTES_CUSTOM_PX_MAX}
+                step={1}
+                value={customPx}
+                aria-label="Custom font size"
+                onPointerDown={(e) => e.stopPropagation()}
+                onChange={(e) => {
+                  onChange('custom');
+                  onCustomPxChange(Number(e.target.value));
+                }}
+                className="flex-1 accent-primary h-1.5"
+              />
+              <input
+                type="number"
+                min={NOTES_CUSTOM_PX_MIN}
+                max={NOTES_CUSTOM_PX_MAX}
+                value={customPx}
+                aria-label="Custom font size in pixels"
+                onPointerDown={(e) => e.stopPropagation()}
+                onChange={(e) => {
+                  onChange('custom');
+                  onCustomPxChange(Number(e.target.value));
+                }}
+                className="w-12 px-1.5 py-1 rounded-md border border-outline-variant bg-card text-[11px] font-mono text-on-surface text-center"
+              />
+            </label>
+            <p className="text-[10px] text-on-surface-variant">{NOTES_CUSTOM_PX_MIN}–{NOTES_CUSTOM_PX_MAX}px</p>
+          </div>
         </div>
       )}
     </div>

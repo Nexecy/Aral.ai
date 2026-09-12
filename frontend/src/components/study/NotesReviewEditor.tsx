@@ -17,7 +17,8 @@ import {
   Gavel,
   Copy,
   ShieldAlert,
-  ListOrdered
+  ListOrdered,
+  X
 } from 'lucide-react';
 import { Notes, NoteContent, NoteMark, NotesHighlightColor, NotesHighlightMode, NotesMarkKind, LegalCase, LegalDoctrine } from '@/lib/types';
 import { api } from '@/lib/api';
@@ -27,16 +28,18 @@ import { NotesAnnotatedText } from '@/components/study/NotesAnnotatedText';
 import { NotesDocumentToolbar } from '@/components/study/NotesDocumentToolbar';
 import { NotesSelectionMenu } from '@/components/study/NotesSelectionMenu';
 import {
+  NOTES_CUSTOM_PX_STORAGE_KEY,
   NOTES_FONT_SIZE_STORAGE_KEY,
   NOTES_HIGHLIGHT_MODE_STORAGE_KEY,
   NotesFontSize,
+  clampNotesCustomPx,
   getNotesTypeScale,
   isNotesFontSize,
   notesScaleVars
 } from '@/lib/notesPreferences';
 import {
-  collectAutoTerms,
   clearMarksInRange,
+  isCredibleGlossaryTerm,
   isNotesHighlightMode,
   makeMark,
   normalizeNoteContent,
@@ -71,20 +74,41 @@ export function NotesReviewEditor({
     'default',
     (raw) => (isNotesFontSize(raw) ? raw : null)
   );
+  const [customPx, setCustomPx] = useLocalStorageState<number>(
+    NOTES_CUSTOM_PX_STORAGE_KEY,
+    16,
+    (raw) => clampNotesCustomPx(raw)
+  );
   const [storedHighlightMode, setStoredHighlightMode] = useLocalStorageState<NotesHighlightMode>(
     NOTES_HIGHLIGHT_MODE_STORAGE_KEY,
     'off',
     (raw) => (isNotesHighlightMode(raw) ? raw : null)
   );
+  const [autoLoading, setAutoLoading] = useState(false);
+  const [autoError, setAutoError] = useState<string | null>(null);
+  const [autoRequestId, setAutoRequestId] = useState(0);
 
   const documentRef = useRef<HTMLDivElement | null>(null);
   const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftRef = useRef<NoteContent | null>(null);
+  const autoKeyRef = useRef<string | null>(null);
 
   const highlightMode: NotesHighlightMode = content.presentation?.highlight_mode ?? storedHighlightMode;
   const marks = content.presentation?.marks || [];
-  const autoTerms = useMemo(() => collectAutoTerms(content), [content]);
+  const autoMarks = marks.filter((mark) => mark.kind === 'highlight' && mark.source === 'auto');
   const formattingEnabled = !isEditing;
   const { selection, clearSelection } = useNotesFieldSelection(documentRef, formattingEnabled);
+  const notesFingerprint = useMemo(
+    () =>
+      JSON.stringify({
+        title: content.title,
+        summary: content.summary,
+        sections: content.sections,
+        cases: content.cases,
+        doctrines: content.doctrines
+      }),
+    [content.title, content.summary, content.sections, content.cases, content.doctrines]
+  );
 
   useEffect(() => {
     if (initialNotes?.content) {
@@ -128,6 +152,10 @@ export function NotesReviewEditor({
   }, [persistNotes, storedHighlightMode]);
 
   const handleHighlightModeChange = (mode: NotesHighlightMode) => {
+    if (mode === 'auto' && autoError) {
+      autoKeyRef.current = null;
+      setAutoRequestId((n) => n + 1);
+    }
     setStoredHighlightMode(mode);
     patchPresentation(() => ({ highlight_mode: mode }));
   };
@@ -341,7 +369,10 @@ export function NotesReviewEditor({
   const addKeyTerm = (sIdx: number) => {
     const updated = { ...content };
     if (!updated.sections[sIdx].key_terms) updated.sections[sIdx].key_terms = [];
-    updated.sections[sIdx].key_terms.push({ term: 'New Term / Maxim', definition: 'Precise definition' });
+    updated.sections[sIdx].key_terms.push({
+      term: isLawReviewer ? 'New Term / Maxim' : 'New term',
+      definition: 'Precise definition'
+    });
     setContent(updated);
   };
 
@@ -354,9 +385,13 @@ export function NotesReviewEditor({
   const addSection = () => {
     const updated = { ...content };
     updated.sections.push({
-      heading: `Section ${updated.sections.length + 1}: Key Legal Topic`,
-      subpoints: ['Core legal rule or statutory provision'],
-      key_terms: [{ term: 'Legal Concept', definition: 'Explanation' }]
+      heading: isLawReviewer
+        ? `Section ${updated.sections.length + 1}: Key Legal Topic`
+        : `Section ${updated.sections.length + 1}`,
+      subpoints: isLawReviewer
+        ? ['Core legal rule or statutory provision']
+        : ['Key point from the notes'],
+      key_terms: [{ term: isLawReviewer ? 'Legal Concept' : 'Key term', definition: 'Explanation' }]
     });
     setContent(updated);
   };
@@ -377,6 +412,7 @@ export function NotesReviewEditor({
     }
     try {
       await api.updateNotes(sessionId, content, 'reviewed edit');
+      draftRef.current = null;
       setIsEditing(false);
       setSaveMessage('Changes saved successfully.');
       setTimeout(() => setSaveMessage(null), 3000);
@@ -385,6 +421,19 @@ export function NotesReviewEditor({
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleCancelEdit = () => {
+    if (persistTimer.current) {
+      clearTimeout(persistTimer.current);
+      persistTimer.current = null;
+    }
+    if (draftRef.current) {
+      setContent(draftRef.current);
+      draftRef.current = null;
+    }
+    setIsEditing(false);
+    setSaveMessage(null);
   };
 
   const handleConfirmAndProceed = async () => {
@@ -414,9 +463,49 @@ export function NotesReviewEditor({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [formattingEnabled, selection, handleFormat]);
 
+  useEffect(() => {
+    if (highlightMode !== 'auto' || isEditing || generating) return;
+    if (autoKeyRef.current === notesFingerprint) return;
+    if (autoMarks.length > 0) {
+      autoKeyRef.current = notesFingerprint;
+      return;
+    }
+
+    let cancelled = false;
+    setAutoLoading(true);
+    setAutoError(null);
+
+    api
+      .generateNoteHighlights(sessionId)
+      .then((highlights) => {
+        if (cancelled) return;
+        autoKeyRef.current = notesFingerprint;
+        const incoming: NoteMark[] = highlights.map((mark, index) => ({
+          ...mark,
+          id: mark.id || `auto_${index}`,
+          kind: 'highlight',
+          source: 'auto'
+        }));
+        patchPresentation((current) => ({
+          marks: [...current.filter((mark) => mark.source !== 'auto'), ...incoming]
+        }));
+      })
+      .catch((err: { message?: string }) => {
+        if (cancelled) return;
+        autoKeyRef.current = notesFingerprint;
+        setAutoError(err?.message || 'Could not generate auto-highlights.');
+      })
+      .finally(() => {
+        if (!cancelled) setAutoLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [highlightMode, isEditing, generating, notesFingerprint, sessionId, patchPresentation, autoRequestId]);
+
   const annot = {
     marks,
-    autoTerms,
     highlightMode
   };
 
@@ -425,8 +514,8 @@ export function NotesReviewEditor({
       {generating && content.sections.length === 0 && (!content.cases || content.cases.length === 0) && (
         <div className="p-10 rounded-2xl bg-card border border-border flex flex-col items-center justify-center gap-3">
           <Loader2 className="w-8 h-8 text-primary animate-spin" />
-          <p className="text-sm font-semibold text-foreground">Generating structured notes & case digests…</p>
-          <p className="text-xs text-muted-foreground">Extracting jurisprudence, doctrines, and core principles.</p>
+          <p className="text-sm font-semibold text-foreground">Generating structured study notes…</p>
+          <p className="text-xs text-muted-foreground">Pulling out the main ideas, terms, and section breakdown.</p>
         </div>
       )}
 
@@ -469,17 +558,33 @@ export function NotesReviewEditor({
           )}
 
           {isEditing ? (
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-xs flex items-center gap-1.5 hover:bg-primary/90 transition-all shadow-sm"
-            >
-              <Save className="w-3.5 h-3.5" />
-              <span>{saving ? 'Saving...' : 'Save Changes'}</span>
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={handleCancelEdit}
+                disabled={saving}
+                className="px-4 py-2 rounded-xl border border-border bg-card text-foreground font-semibold text-xs flex items-center gap-1.5 hover:bg-muted transition-all shadow-sm disabled:opacity-50"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>Cancel</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving}
+                className="px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-xs flex items-center gap-1.5 hover:bg-primary/90 transition-all shadow-sm"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>{saving ? 'Saving...' : 'Save Changes'}</span>
+              </button>
+            </>
           ) : (
             <button
-              onClick={() => setIsEditing(true)}
+              type="button"
+              onClick={() => {
+                draftRef.current = JSON.parse(JSON.stringify(content)) as NoteContent;
+                setIsEditing(true);
+              }}
               className="px-4 py-2 rounded-xl border border-border bg-card text-foreground font-semibold text-xs flex items-center gap-1.5 hover:bg-muted transition-all shadow-sm"
             >
               <Edit3 className="w-3.5 h-3.5" />
@@ -556,8 +661,13 @@ export function NotesReviewEditor({
         onColorChange={handleHighlight}
         fontSize={fontSize}
         onFontSizeChange={setFontSize}
+        customPx={customPx}
+        onCustomPxChange={(px) => setCustomPx(clampNotesCustomPx(px))}
         formattingEnabled={formattingEnabled}
         onFormat={handleFormat}
+        autoTermCount={autoMarks.length}
+        autoLoading={autoLoading}
+        autoError={autoError}
       />
 
       {formattingEnabled && (
@@ -576,7 +686,7 @@ export function NotesReviewEditor({
       {/* Main Notes Sheet */}
       <div
         ref={documentRef}
-        style={notesScaleVars(getNotesTypeScale(fontSize))}
+        style={notesScaleVars(getNotesTypeScale(fontSize, customPx))}
         className="notes-document bg-card border border-border rounded-2xl p-6 sm:p-10 md:p-12 shadow-notion-elevated space-y-10 w-full"
       >
         {/* Title & Summary */}
@@ -604,7 +714,11 @@ export function NotesReviewEditor({
               onChange={(e) => setContent({ ...content, summary: e.target.value })}
               rows={2}
               className="w-full text-sm sm:text-[15px] text-foreground bg-muted/40 p-3 rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary resize-none leading-relaxed"
-              placeholder="Executive summary of legal concepts, doctrines, and holdings..."
+              placeholder={
+                isLawReviewer
+                  ? 'Executive summary of legal concepts, doctrines, and holdings...'
+                  : 'Short overview of what these notes cover...'
+              }
             />
           ) : (
             <div className="p-4 sm:p-5 rounded-xl bg-surface-container-low border border-border">
@@ -625,7 +739,7 @@ export function NotesReviewEditor({
         </div>
 
         {/* ── PART 1: JURISPRUDENCE & CASE BRIEFS (FIRAC) ──────────────────────── */}
-        {(activeTab === 'all' || activeTab === 'cases') && (hasCases || isEditing) && (
+        {(activeTab === 'all' || activeTab === 'cases') && (hasCases || (isEditing && isLawReviewer)) && (
           <div className="space-y-6">
             <div className="flex items-center justify-between gap-3 pb-2 border-b border-border/80">
               <div className="flex items-center gap-2">
@@ -875,7 +989,7 @@ export function NotesReviewEditor({
         )}
 
         {/* ── PART 2: LEGAL DOCTRINES & REQUISITES ───────────────────────────── */}
-        {(activeTab === 'all' || activeTab === 'doctrines') && (hasDoctrines || isEditing) && (
+        {(activeTab === 'all' || activeTab === 'doctrines') && (hasDoctrines || (isEditing && isLawReviewer)) && (
           <div className="space-y-6">
             <div className="flex items-center justify-between gap-3 pb-2 border-b border-border/80">
               <div className="flex items-center gap-2">
@@ -1202,15 +1316,17 @@ export function NotesReviewEditor({
                 </div>
 
                 {/* Key Terms Pill Grid */}
-                {((section.key_terms && section.key_terms.length > 0) || isEditing) && (
+                {((section.key_terms && section.key_terms.some((kt) => isEditing || isCredibleGlossaryTerm(kt.term, kt.definition))) || isEditing) && (
                   <div className="mt-3 pl-5 sm:pl-6">
                     <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2.5 flex items-center gap-1.5">
                       <Tag className="w-3 h-3 text-primary" />
-                      <span>Key Terms & Maxims</span>
+                      <span>{isLawReviewer ? 'Key Terms & Maxims' : 'Key Terms'}</span>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {section.key_terms?.map((kt, tIdx) => (
+                      {section.key_terms?.map((kt, tIdx) => {
+                        if (!isEditing && !isCredibleGlossaryTerm(kt.term, kt.definition)) return null;
+                        return (
                         <div
                           key={tIdx}
                           className="p-3.5 rounded-xl bg-surface-container-low/90 border border-border space-y-1 hover:border-primary/40 transition-colors"
@@ -1222,7 +1338,7 @@ export function NotesReviewEditor({
                                 value={kt.term}
                                 onChange={(e) => handleKeyTermChange(sIdx, tIdx, 'term', e.target.value)}
                                 className="w-full font-bold text-xs sm:text-sm bg-card px-2 py-1 rounded-md border border-border text-primary"
-                                placeholder="Term / Maxim"
+                                placeholder={isLawReviewer ? 'Term / Maxim' : 'Term'}
                               />
                               <textarea
                                 value={kt.definition}
@@ -1255,7 +1371,8 @@ export function NotesReviewEditor({
                             </>
                           )}
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
 
                     {isEditing && (
@@ -1274,25 +1391,6 @@ export function NotesReviewEditor({
           </div>
         )}
 
-        {/* Global Add Law Digest Button if none exist yet */}
-        {!isLawReviewer && isEditing && (
-          <div className="pt-4 flex flex-wrap items-center gap-3 border-t border-border">
-            <button
-              onClick={addCase}
-              className="px-3.5 py-2 rounded-xl border border-primary/40 text-primary text-xs font-bold flex items-center gap-1.5 hover:bg-primary/5 transition-all"
-            >
-              <Scale className="w-3.5 h-3.5" />
-              <span>+ Add Law Case Digest</span>
-            </button>
-            <button
-              onClick={addDoctrine}
-              className="px-3.5 py-2 rounded-xl border border-primary/40 text-primary text-xs font-bold flex items-center gap-1.5 hover:bg-primary/5 transition-all"
-            >
-              <Gavel className="w-3.5 h-3.5" />
-              <span>+ Add Legal Doctrine</span>
-            </button>
-          </div>
-        )}
       </div>
       </div>
     </div>
