@@ -1,0 +1,16 @@
+venv/
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+*.pyo
+*.egg-info/
+tests/
+.env
+.env.*
+!.env.example
+storage/
+.local_users.json
+*.md
+.coverage
+htmlcov/

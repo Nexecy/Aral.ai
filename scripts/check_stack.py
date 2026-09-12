@@ -3,7 +3,7 @@ Probe the Aral.ai API health endpoint.
 
 Usage (from the repo root):
     python scripts/check_stack.py
-    python scripts/check_stack.py --base-url https://aral-ai.onrender.com
+    python scripts/check_stack.py --base-url https://aral-ai-api-xxxxx-uc.a.run.app
     python scripts/check_stack.py --require-gemini --require-supabase
 """
 from __future__ import annotations

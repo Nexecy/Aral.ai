@@ -5,6 +5,17 @@ All notable changes to Aral.ai are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.4] — 2026-09-12
+
+### Added
+- Google Cloud Run deploy path for the FastAPI API: `backend/Dockerfile`, `backend/cloudrun.yaml`, and `python scripts/deploy_cloudrun.py`.
+- Hosted-runtime detection for Cloud Run (`K_SERVICE` / `CLOUD_RUN_JOB`) so anonymous `demo-token` auth stays disabled off-localhost.
+
+### Changed
+- Cloud Run service defaults: 2 GiB RAM, 900s timeout, CPU always allocated (so PDF parse after HTTP 202 can finish), scale-to-zero, `us-central1` free-tier region.
+- Public Cloud Run access uses `--no-invoker-iam-check` instead of `allUsers` IAM, so org domain-restricted sharing does not block the deploy.
+- Production API origin is `https://aral-ai-api-686935671952.us-central1.run.app`.
+
 ## [1.0.3] — 2026-09-08
 
 ### Added

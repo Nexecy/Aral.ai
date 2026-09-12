@@ -57,3 +57,7 @@ def test_health_url_accepts_host_or_api_prefix():
     assert health_url("http://localhost:8000") == "http://localhost:8000/api/health"
     assert health_url("http://localhost:8000/") == "http://localhost:8000/api/health"
     assert health_url("https://aral-ai.onrender.com/api") == "https://aral-ai.onrender.com/api/health"
+    assert (
+        health_url("https://aral-ai-api-686935671952.us-central1.run.app/api")
+        == "https://aral-ai-api-686935671952.us-central1.run.app/api/health"
+    )

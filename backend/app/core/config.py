@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     SUPPORT_EMAIL: str = Field(default="aral.ai.app@gmail.com")
 
     FRONTEND_URL: str = Field(default="http://localhost:3005")
-    # Used when the API is hosted (Render) but FRONTEND_URL was left on localhost.
+    # Used when the API is hosted (Cloud Run / Render) but FRONTEND_URL was left on localhost.
     PRODUCTION_FRONTEND_URL: str = Field(default="https://aral-ai-three.vercel.app")
 
     # Extra CORS origins (comma-separated). Merged with LOCAL_FRONTEND_ORIGINS
@@ -71,7 +71,13 @@ class Settings(BaseSettings):
 
     @property
     def is_hosted(self) -> bool:
-        return bool(os.getenv("RENDER") or os.getenv("RENDER_EXTERNAL_URL"))
+        # Cloud Run sets K_SERVICE; Cloud Run jobs set CLOUD_RUN_JOB; Render sets RENDER*.
+        return bool(
+            os.getenv("K_SERVICE")
+            or os.getenv("CLOUD_RUN_JOB")
+            or os.getenv("RENDER")
+            or os.getenv("RENDER_EXTERNAL_URL")
+        )
 
     @property
     def is_production(self) -> bool:

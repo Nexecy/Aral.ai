@@ -1,6 +1,6 @@
 from typing import Any, Dict, List
 
-APP_VERSION = "1.0.3"
+APP_VERSION = "1.0.4"
 
 
 def build_health_payload() -> Dict[str, Any]:

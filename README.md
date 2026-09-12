@@ -65,7 +65,7 @@ Confirm the stack:
 ```bash
 python scripts/check_stack.py
 # On a hosted API:
-python scripts/check_stack.py --base-url https://aral-ai.onrender.com --require-gemini --require-supabase
+python scripts/check_stack.py --base-url https://SERVICE_URL --require-gemini --require-supabase
 ```
 
 ### 1. Backend (FastAPI)
@@ -120,15 +120,30 @@ CI (GitHub Actions) runs backend pytest and a Vercel-mode Next.js production bui
 **Frontend (Vercel)**  
 - Root directory: `frontend`  
 - Framework: Next.js (do **not** use static export on Vercel — `next.config.mjs` keeps a server build when `VERCEL=1`)  
-- Environment variable: `NEXT_PUBLIC_API_URL=https://aral-ai.onrender.com/api`  
+- Environment variable: `NEXT_PUBLIC_API_URL=https://aral-ai-api-686935671952.us-central1.run.app/api`  
   (required for production; without it the client would try localhost)
 
-**Backend (Render)**  
+**Backend (Google Cloud Run)** — 2 GiB RAM, scale-to-zero, often $0 in `us-central1`
+
+1. Install the [Google Cloud SDK](https://cloud.google.com/sdk/docs/install), create a GCP project, and attach a billing account (required even for the always-free Cloud Run allowance).
+2. In your own terminal:
+
+```bash
+gcloud auth login
+gcloud auth application-default login
+gcloud config set project YOUR_PROJECT_ID
+python scripts/deploy_cloudrun.py --project YOUR_PROJECT_ID --region us-central1
+```
+
+3. In Vercel set `NEXT_PUBLIC_API_URL=https://aral-ai-api-686935671952.us-central1.run.app/api` and redeploy the frontend.
+4. Confirm: `python scripts/check_stack.py --base-url https://aral-ai-api-686935671952.us-central1.run.app --require-gemini --require-supabase`
+
+The deploy script reads `backend/.env`, sets `ENVIRONMENT=production`, uses **2 GiB** memory, a **900s** request timeout (PDF OCR + SSE), and **CPU always allocated** so FastAPI background PDF parsing can finish after HTTP 202. Min instances stay **0** so idle time is free. Stay in `us-central1`, `us-east1`, or `us-west1` for the free-tier allowance.
+
+The landing page pings `/api/health` so a scaled-to-zero revision can wake up.
+
+**Backend (Render, optional)**  
 - Root directory: `backend`  
 - Start: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`  
 - Health check: `/api/health`  
-- Set `ENVIRONMENT=production` (anonymous demo-token auth is disabled on Render automatically)  
-- Set `FRONTEND_URL` to the Vercel origin (e.g. `https://aral-ai-three.vercel.app`)  
-- CORS allows `*.vercel.app` preview deployments and any extra origins in `CORS_ORIGINS`
-
-The landing page pings `/api/health` so a sleeping free-tier API can wake up.
+- Free instances are 512 MB and sleep after idle; prefer Cloud Run if PDFs OOM.

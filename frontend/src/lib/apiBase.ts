@@ -1,4 +1,6 @@
-export const DEFAULT_PRODUCTION_API_URL = 'https://aral-ai.onrender.com/api';
+// Fallback only if Vercel is missing NEXT_PUBLIC_API_URL.
+export const DEFAULT_PRODUCTION_API_URL =
+  'https://aral-ai-api-686935671952.us-central1.run.app/api';
 export const DEFAULT_DEV_API_URL = 'http://127.0.0.1:8000/api';
 
 type ApiEnv = {
@@ -28,7 +30,7 @@ export function warnIfApiBaseMisconfigured(apiBase: string = resolveApiBase()): 
   if (apiBaseMisconfiguredForHost(apiBase, window.location.hostname)) {
     console.error(
       `[Aral.ai] API URL is ${apiBase} but this page is ${window.location.origin}. ` +
-        'Set NEXT_PUBLIC_API_URL to the hosted FastAPI origin (e.g. https://aral-ai.onrender.com/api) in Vercel.'
+        'Set NEXT_PUBLIC_API_URL to the hosted FastAPI origin (e.g. https://aral-ai-api-686935671952.us-central1.run.app/api) in Vercel.'
     );
   }
 }

@@ -107,7 +107,7 @@ class ApiClient {
     });
   }
 
-  /** Lightweight ping to wake up free-tier backend host upon landing */
+  /** Lightweight ping to wake a scale-to-zero API (Cloud Run / Render) on landing */
   async pingBackend(): Promise<boolean> {
     warnIfApiBaseMisconfigured(API_BASE);
     try {

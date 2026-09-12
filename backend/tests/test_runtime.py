@@ -96,6 +96,32 @@ def test_render_hosting_rejects_anonymous_requests_even_in_development(monkeypat
     assert response.status_code == 401
 
 
+def test_cloud_run_is_detected_as_hosted(monkeypatch):
+    monkeypatch.setattr(settings, "ENVIRONMENT", "development")
+    monkeypatch.setenv("K_SERVICE", "aral-ai-api")
+    assert settings.is_hosted is True
+    assert settings.is_production is True
+    assert settings.allow_anonymous_auth is False
+
+
+def test_cloud_run_hosting_rejects_anonymous_requests_even_in_development(monkeypatch):
+    monkeypatch.setattr(settings, "ENVIRONMENT", "development")
+    monkeypatch.setenv("K_SERVICE", "aral-ai-api")
+    response = client.get("/api/documents")
+    assert response.status_code == 401
+
+
+def test_cloud_run_frontend_origin_replaces_localhost(monkeypatch):
+    monkeypatch.setenv("K_SERVICE", "aral-ai-api")
+    configured = Settings(
+        ENVIRONMENT="development",
+        FRONTEND_URL="http://localhost:3005",
+        PRODUCTION_FRONTEND_URL="https://aral-ai-three.vercel.app",
+    )
+    assert configured.is_hosted is True
+    assert configured.frontend_origin == "https://aral-ai-three.vercel.app"
+
+
 def test_development_still_accepts_demo_token():
     response = client.get("/api/auth/me", headers={"Authorization": "Bearer demo-token"})
     assert response.status_code == 200

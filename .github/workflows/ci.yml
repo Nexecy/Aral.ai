@@ -42,4 +42,4 @@ jobs:
         run: npm run build
         env:
           VERCEL: "1"
-          NEXT_PUBLIC_API_URL: https://aral-ai.onrender.com/api
+          NEXT_PUBLIC_API_URL: https://aral-ai-api-686935671952.us-central1.run.app/api
